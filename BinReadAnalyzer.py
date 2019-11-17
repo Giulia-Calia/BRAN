@@ -299,6 +299,5 @@ if __name__ == "__main__":
             analyzer.plot_all(ns=args.Ns_count)
         else:
             analyzer.plot_all(ns=False)
-    
 
     analyzer.normalize_bins()
