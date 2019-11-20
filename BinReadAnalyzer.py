@@ -1,19 +1,16 @@
 """ Bin read analyzer class"""
 
-import pickle
 import os
-import sys 
 import argparse
-import pandas as pd
-import numpy as np
-import gzip
-import plotly
 import plotly.graph_objects as go
-from Bio.SeqIO.FastaIO import SimpleFastaParser
 from BinReadCounter import BinReadCounter
 import rpy2.robjects as robjects
-from rpy2.robjects.vectors import FactorVector, StrVector, IntVector
+import rpy2.robjects.packages as rpackages
 from rpy2.robjects.packages import importr
+base = importr('base')
+utils = importr('utils')
+stats = importr('stats')
+
 
 class BinReadAnalyzer:
     def __init__(self, folder_name, bin_size, ref_genome, flags, out_pickle):
@@ -24,193 +21,300 @@ class BinReadAnalyzer:
         self.out = out_pickle
         # self.control_file = None
 
-    def load_data(self):
-        """If the pickle file is present and the parameters are not 
-        changed, the data structures were kept otherwise it runs the 
+    def load_data(self, verbose=False):
+        """If the pickle file is present and the parameters are not
+        changed, the data structures were kept otherwise it runs the
         methods load_reads and loads_Ns of the imported class BinReadCounter
         """
+        counter = BinReadCounter(self.folder, self.bin_size, self.flags, self.ref, self.out)
         actual_params = [self.bin_size, self.flags, self.ref]
         equals = []
-       
+        new_file = ""
         list_dir = os.listdir(self.folder)
         # verify if a pickle file is present in the desired folder
         for file in list_dir:
             if file.endswith(".p"):
-                # print(file)
                 # if so, checks if the parameters for the building-up of
                 # the previous pickle file, are the same as the actual ones
-                counter = BinReadCounter(self.folder, self.bin_size, self.flags, self.ref, file)
                 counter.set_out(file)
                 old_params = counter._load_pickle()[0]
                 # print(old_params)
                 if actual_params == old_params:
-                    # if the parameters are the same, the data strucutures were imported
+                    # if the parameters are the same, the data structures were imported
                     equals.append(file)
-                    print("No difference in parameters")
+                    if verbose:
+                        print("Same parameters\nThe pickle file is directly imported from: ", file)
                     return counter._load_pickle()[1]
 
                 else:
                     continue
             else:
                 continue
-        
+
         if not equals:
             # if the list is empty, none of the pickle files in the current directory
-            # have the same parameters of the actual running thus the algorithm uses 
-            # the modules of the BinReadCounter to calculate the new data structures 
-            # and it saves a new pickle file 
-            print("Parameters are changed\nBinReadCounter is running with actual parameters\nIT COULD TAKE A WHILE")
+            # have the same parameters of the actual running thus the algorithm uses
+            # the modules of the BinReadCounter to calculate the new data structures
+            # and it saves a new pickle file
+            if verbose:
+                print("Parameters are changed\n",
+                      "BinReadCounter is running with actual parameters\n",
+                      "IT COULD TAKE A WHILE to create and import the pickle file")
             counter._export_pickle()
-            return counter.load_data()
+            return counter._load_pickle()[1]
 
+    def add_ns_trace(self, fig, chrom=None):
+        count_N_df = self.load_data()[1]
+        if chrom != None:
+            single_chrom_N = count_N_df[count_N_df["chr"] == "CH.chr" + str(chrom)]
+            return fig.add_trace(go.Scatter(x=single_chrom_N["bin"],
+                                            y=single_chrom_N["N_count"],
+                                            mode="markers",
+                                            name="N_counts"))
 
-    def plot_chrom_sample(self, chrom, sample, ns, fig=go.Figure()):
+        else:
+            return fig.add_trace(go.Scatter(x=count_N_df["bin"],
+                                            y=count_N_df["N_count"],
+                                            mode="markers",
+                                            name="N_counts"))
+
+    def plot_chrom_sample(self, chrom, sample, ns=False, fig=go.Figure()):
         read_df = self.load_data()[0]
 
         if not os.path.exists("plots"):
             os.mkdir("plots")
-        
-        fig.update_xaxes(title_text="Cromosomes_Bins")
+
+        fig.update_xaxes(title_text="Chromosomes_Bins")
         fig.update_yaxes(title_text="Read_Count_Per_Bin")
 
         single_chrom = read_df[read_df["chr"] == "CH.chr" + str(chrom)]
         col_list = list(single_chrom.columns)
         for i in range(len(col_list[:col_list.index(sample)]) + 1):
             if col_list[i] == sample:
-                fig.add_trace(go.Scatter(x=single_chrom["bin"], 
-                                        y=single_chrom[sample], 
-                                        mode="markers",
-                                        name=str(col_list[i])))
+                fig.add_trace(go.Scatter(x=single_chrom["bin"],
+                                         y=single_chrom[sample],
+                                         mode="markers",
+                                         name=str(col_list[i])))
 
         if ns:
-            count_N_df = self.load_data()[1]
-            single_chrom_N = count_N_df[count_N_df["chr"] == "CH.chr" + str(chrom)]
-            fig.add_trace(go.Scatter(x=single_chrom_N["bin"],
-                                    y=single_chrom_N["N_count"],
-                                    mode="markers",
-                                    name="N_counts"))
+            self.add_ns_trace(fig, chrom=chrom)
 
-        fig.update_layout(title="Read Counts - Clone: " + sample + " - Chr: " + str(chrom) + " - Bin Size: " + str(self.bin_size))
-        
+        fig.update_layout(
+            title="Read Counts - Clone: " + sample + " - Chr: " + str(chrom) + " - Bin Size: " + str(self.bin_size))
+
         fig.show()
-        
 
-    def plot_chromosome(self, chrom, ns, fig=go.Figure()):
+    def plot_chromosome(self, chrom, ns=False, fig=go.Figure()):
         read_df = self.load_data()[0]
-        
+
         if not os.path.exists("plots"):
             os.mkdir("plots")
-        
-        fig.update_xaxes(title_text="Cromosomes_Bins")
+
+        fig.update_xaxes(title_text="Chromosomes_Bins")
         fig.update_yaxes(title_text="Read_Count_Per_Bin")
 
         single_chrom = read_df[read_df["chr"] == "CH.chr" + str(chrom)]
         col_list = list(single_chrom.columns)
         for i in range(len(col_list)):
-                if col_list[i] != "bin" and col_list[i] != "chr":
-                    fig.add_trace(go.Scatter(x=single_chrom["bin"], 
-                                            y=single_chrom[col_list[i]], 
-                                            mode="markers",
-                                            name=str(col_list[i])))
-
+            if col_list[i] != "bin" and col_list[i] != "chr":
+                fig.add_trace(go.Scatter(x=single_chrom["bin"],
+                                         y=single_chrom[col_list[i]],
+                                         mode="markers",
+                                         name=str(col_list[i])))
         if ns:
-            count_N_df = self.load_data()[1]
-            single_chrom_N = count_N_df[count_N_df["chr"] == "CH.chr" + str(chrom)]
-            fig.add_trace(go.Scatter(x=single_chrom_N["bin"],
-                                    y=single_chrom_N["N_count"],
-                                    mode="markers",
-                                    name="N_counts"))
-
+            self.add_ns_trace(fig, chrom=chrom)
 
         fig.update_layout(title="Read Counts - All Clones - Chr: " + str(chrom) + " - Bin Size: " + str(self.bin_size))
-        fig.write_image("plots/counts_chr" + str(chrom) + "_all_"  + str(self.bin_size) + ".pdf")
-        
-        fig.show()
-   
+        fig.write_image("plots/counts_chr" + str(chrom) + "_all_" + str(self.bin_size) + ".pdf")
 
-    def plot_sample(self, sample, ns, fig=go.Figure()):
+        fig.show()
+
+    def plot_sample(self, sample, ns=False, fig=go.Figure()):
         read_df = self.load_data()[0]
-        
+
         if not os.path.exists("plots"):
             os.mkdir("plots")
-        
-        fig.update_xaxes(title_text="Cromosomes_Bins")
+
+        fig.update_xaxes(title_text="Chromosomes_Bins")
         fig.update_yaxes(title_text="Read_Count_Per_Bin")
 
         col_read_df = list(read_df.columns)
         for i in range(len(col_read_df[:col_read_df.index(sample)]) + 1):
             if col_read_df[i] == sample:
-                fig.add_trace(go.Scatter(x=read_df["bin"], 
-                                        y=read_df[sample], 
-                                        mode="markers",
-                                        name=str(col_read_df[i])))
+                fig.add_trace(go.Scatter(x=read_df["bin"],
+                                         y=read_df[sample],
+                                         mode="markers",
+                                         name=str(col_read_df[i])))
 
         if ns:
-            count_N_df = self.load_data()[1]
-            fig.add_trace(go.Scatter(x=count_N_df["bin"],
-                                    y=count_N_df["N_count"],
-                                    mode="markers",
-                                    name="N_counts"))
+            self.add_ns_trace(fig)
 
-        
-        
         fig.update_layout(title="Read Counts - Clone: " + sample + " - Bin Size: " + str(self.bin_size))
-        
+
         fig.show()
 
-
-    def plot_all(self, ns):
+    def plot_all(self, ns=False):
         read_df = self.load_data()[0]
-        
+
         if not os.path.exists("plots"):
             os.mkdir("plots")
 
         fig = go.Figure()
-        fig.update_xaxes(title_text="Cromosomes_Bins")
+        fig.update_xaxes(title_text="Chromosomes_Bins")
         fig.update_yaxes(title_text="Read_Count_Per_Bin")
 
         col_list = list(read_df.columns)
         for i in range(len(col_list)):
-                if col_list[i] != "bin" and col_list[i] != "chr":
-                    fig.add_trace(go.Scatter(x=read_df["bin"], 
-                                            y=read_df[col_list[i]], 
-                                            mode="markers",
-                                            name=str(col_list[i])))
+            if col_list[i] != "bin" and col_list[i] != "chr":
+                fig.add_trace(go.Scatter(x=read_df["bin"],
+                                         y=read_df[col_list[i]],
+                                         mode="markers",
+                                         name=str(col_list[i])))
 
         if ns:
-            count_N_df = self.load_data()[1]
-            fig.add_trace(go.Scatter(x=count_N_df["bin"],
-                                    y=count_N_df["N_count"],
-                                    mode="markers",
-                                    name="N_counts"))
+            self.add_ns_trace(fig)
 
         fig.update_layout(title="Read Counts - All Clones - All Chromosomes - Bin Size: " + str(self.bin_size))
         fig.write_image("plots/counts_all_" + str(self.bin_size) + ".pdf")
 
-    
+        fig.show()
+
     def normalize_bins(self):
-        # if self.control == True:
-        # robjects.r("library(edgeR)")
+
         read_counts = self.load_data()[0]
-        print(read_counts.sum(axis=0)[2])
+        # the following line has to be deleted when the class will work on the entire .bam files
+        chr1 = read_counts[read_counts['chr'] == 'CH.chr1']
+        edger = rpackages.importr('edgeR')
+        read_counts_edger = {}
+        col_list = list(chr1.columns)
+        for i in range(len(col_list)):
+            if col_list[i] != "chr" and col_list[i] != 'bin':
+                read_counts_edger[col_list[i]] = robjects.IntVector(chr1[col_list[i]])  # include after testing
+
+        read_counts_edger_df = robjects.DataFrame(read_counts_edger)
+
+        # in order to obtain a normalized counts table, is not necessary
+        # have a DGEList object, it is sufficient to have a table of raw
+        # count as in this case
+        # summarized = edger.DGEList(counts=read_counts_edger_df)
+        # norm_counts = edger.cpm(summarized, normalized_lib_sizes=False)
+
+        norm_counts = edger.cpm(read_counts_edger_df, normalized_lib_sizes=True)
+
+        # log_cpm = edger.cpm(summarized, log=True) NOT NECESSARY
+        # norm_factors = edger.calcNormFactors(summarized) NOT NECESSARY
+        # pseudo_counts = edger.estimateCommonDisp(norm_factors) NOT USEFUL NOT NORM_COUNTS
+        # print(norm_counts.rx(True, 1)) in other cases useful in selecting an entire column
+        return norm_counts
+
+        # d = {'bin': robjects.IntVector(chr1['bin']), 'counts': robjects.IntVector(chr1['Ch15_3_1_ref_IlluminaPE_aligns
+        # _Primary_chr1'])}
+
+    def plot_norm_data_chr_sample(self, chrom, sample, ns=False, fig=go.Figure()):
+        if not os.path.exists("plots"):
+            os.mkdir("plots")
+        read_counts = self.load_data()[0]
+        norm_counts = self.normalize_bins()
+
+        if not os.path.exists("plots"):
+            os.mkdir("plots")
+
+        fig.update_xaxes(title_text="Chromosomes_Bins")
+        fig.update_yaxes(title_text="Norm_Read_Count_Per_Bin")
+
+        single_chrom = read_counts[read_counts["chr"] == "CH.chr" + str(chrom)]
+        col_list = list(single_chrom.columns)
+        for i in range(1, len(col_list[1:])):
+            if col_list[i] == sample:
+                fig.add_trace(go.Scatter(x=single_chrom["bin"],
+                                         y=list(norm_counts.rx(True, i)),
+                                         mode="markers",
+                                         name=str(col_list[i + 1])))
+
+        if ns:
+            self.add_ns_trace(fig, chrom=chrom)
+
+        fig.update_layout(title="Normalized Read Counts - Clone: " + sample + " - Chr: " + str(chrom) + " - Bin Size: "
+                                + str(self.bin_size))
+
+        fig.show()
+
+    def plot_norm_data_chr(self, chrom, ns=False, fig=go.Figure()):
+        if not os.path.exists("plots"):
+            os.mkdir("plots")
+
+        read_counts = self.load_data()[0]
+        norm_counts = self.normalize_bins()
+
+        fig.update_xaxes(title_text="Chromosomes_Bins")
+        fig.update_yaxes(title_text="Norm_Read_Count_Per_Bin")
+
+        single_chrom = read_counts[read_counts["chr"] == "CH.chr" + str(chrom)]
+        col_list = list(single_chrom.columns)
+        for i in range(1, len(col_list[1:])):
+            fig.add_trace(go.Scatter(x=single_chrom["bin"],
+                                     y=list(norm_counts.rx(True, i)),
+                                     mode="markers",
+                                     name=str(col_list[i + 1])))
+        if ns:
+            self.add_ns_trace(fig, chrom=chrom)
+
+        fig.update_layout(
+            title="Normalized Read Counts - Clone: all - Chr: " + str(chrom) + " - Bin Size: " + str(self.bin_size))
+
+        fig.show()
+
+    def plot_norm_data_sample(self, sample, ns=False, fig=go.Figure()):
+        if not os.path.exists("plots"):
+            os.mkdir("plots")
+        read_counts = self.load_data()[0]
+        norm_counts = self.normalize_bins()
+        fig.update_xaxes(title_text="Chromosomes_Bins")
+        fig.update_yaxes(title_text="Norm_Read_Count_Per_Bin")
+
+        single_sample = read_counts[["chr", "bin", sample]]
+        print(single_sample)
+        col_list = list(single_sample.columns)
+        for i in range(len(col_list)):
+            if col_list[i] == sample:
+                fig.add_trace(go.Scatter(x=single_sample["bin"],
+                                         y=list(norm_counts.rx(True, i)),
+                                         mode="markers",
+                                         name=str(col_list[i])))
+
+        if ns:
+            self.add_ns_trace(fig)
+
+        fig.update_layout(
+            title="Normalized Read Counts - Clone: " + sample + " - Chr: all - Bin Size: " + str(self.bin_size))
+
+        fig.show()
+
+    def plot_norm_data_all(self, ns=False, fig=go.Figure()):
+        if not os.path.exists("plots"):
+            os.mkdir("plots")
+
+        read_counts = self.load_data()[0]
+        norm_counts = self.normalize_bins()
         col_list = list(read_counts.columns)
-        print(col_list)
+        fig.update_xaxes(title_text="Chromosomes_Bins")
+        fig.update_yaxes(title_text="Norm_Read_Count_Per_Bin")
+
+        for i in range(1, len(col_list[1:])):
+            fig.add_trace(go.Scatter(x=read_counts["bin"],
+                                     y=list(norm_counts.rx(True, i)),
+                                     mode="markers",
+                                     name=col_list[i + 1]))
+
+        if ns:
+            self.add_ns_trace(fig)
+
+        fig.update_layout(title="Normalized Read Counts - Clone: all - Chr: all - Bin Size: " + str(self.bin_size))
+
+        fig.show()
+
+    def get_significant_diff(self, chr=None, sample=None):
         pass
-
-
-
-        
-        
-
-
-    
-    def plot_norm_data(self):
-        pass
-
-
-    def get_significant_diff(self, chr = None, sample = None):
-        pass
-
 
     def plot_sig_data(self):
         pass
@@ -273,31 +377,37 @@ if __name__ == "__main__":
     
     
     analyzer = BinReadAnalyzer(args.folder, args.bin_size, args.reference, flags, args.output_pickle)
-   
-    # analyzer.load_data()
-    
+
+    analyzer.load_data(verbose=True)
+
     if args.chromosome and args.sample:
         if args.Ns_count:
-            analyzer.plot_chrom_sample(args.chromosome, args.sample, ns=args.Ns_count)
+            analyzer.plot_chrom_sample(args.chromosome, args.sample, args.Ns_count)
+            analyzer.plot_norm_data_chr_sample(args.chromosome, args.sample, args.Ns_count)
         else:
-            analyzer.plot_chrom_sample(args.chromosome, args.sample, ns=False)
+            analyzer.plot_chrom_sample(args.chromosome, args.sample)
+            analyzer.plot_norm_data_chr_sample(args.chromosome, args.sample)
 
     elif args.chromosome:
         if args.Ns_count:
-            analyzer.plot_chromosome(args.chromosome, ns=args.Ns_count)
+            analyzer.plot_chromosome(args.chromosome, args.Ns_count)
+            analyzer.plot_norm_data_chr(args.chromosome, args.Ns_count)
         else:
-            analyzer.plot_chromosome(args.chromosome, ns=False)
+            analyzer.plot_chromosome(args.chromosome)
+            analyzer.plot_norm_data_chr(args.chromosome)
 
     elif args.sample:
         if args.Ns_count:
-            analyzer.plot_sample(args.sample, ns=args.Ns_count)
+            analyzer.plot_sample(args.sample, args.Ns_count)
+            analyzer.plot_norm_data_sample(args.sample, args.Ns_count)
         else:
-            analyzer.plot_sample(args.sample, ns=False)
-    
+            analyzer.plot_sample(args.sample)
+            analyzer.plot_norm_data_sample(args.sample)
+
     else:
         if args.Ns_count:
-            analyzer.plot_all(ns=args.Ns_count)
+            analyzer.plot_all(args.Ns_count)
+            analyzer.plot_norm_data_all(args.Ns_count)
         else:
-            analyzer.plot_all(ns=False)
-
-    analyzer.normalize_bins()
+            analyzer.plot_all()
+            analyzer.plot_norm_data_all()
