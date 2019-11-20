@@ -2,16 +2,16 @@
 # 
 # This class aims to first divide the chromosomes into small pieces (bins),
 # of about 0.25 Mb as default, and then count the number of desired reads
-# that fall into each bin. This information is saved in an appropiate data
-# structure that keeps trak of the clone-name, the chromosome of interest
+# that fall into each bin. This information is saved in a proper data
+# structure that keeps track of the clone-name, the chromosome of interest
 # and the bins for each chromosome.
 # 
 # Due to the importance of "N" bases in the genome, also the count for these
-# bases is take as a record for the counts-normalization, storing each count
-# in another data structure that gives inforamtion on the chromosome and the 
-# count of "N" bases in each bin of it.
+# bases could be taken as a record for the counts-normalization, storing each
+# count in another data structure that gives information on the chromosome
+# and the count of "N" bases in each bin of it.
 # 
-# The data structure as well as their paramerers, are saved in a binary file
+# The data structure as well as their parameters, are saved in a binary file
 # created with pickle library, in order to facilitate future works on the 
 # structures. 
 
@@ -27,7 +27,6 @@ import progressbar
 
 class BinReadCounter:
     """This class creates two data structures: read_counts and N_counts
-
 
     Attributes:
         folder (str): the folder in which retrieve the alignment files
@@ -49,68 +48,50 @@ class BinReadCounter:
         """return the folder name"""
         return self.folder
 
-
     def set_folder(self, other_folder):
         """set the folder to which retrieve the files"""
         self.folder = other_folder    
 
-
-    def get_bin_size(self): 
+    def get_bin_size(self):
         """return the number of bases in each bin"""
         return self.bin_size
     
-
     def set_bin_size(self, other_size):
         """set the number of bases in each bin"""
         self.bin_size = other_size
 
-
     def get_flags(self):
         """return the list of bitwise-flags that are filtered"""
         return self.flags
-    
 
     def set_flags(self, other_flag):
-        """add to the defoult list of bitwise-flags, the new flags"""
+        """add to the default list of bitwise-flags, the new flags"""
         self.flags = self.flags + (other_flag)
-
 
     def get_ref(self):
         """return the name of the reference file"""
         return self.ref
 
-
     def set_ref(self, other_ref):
         """set the file used as a reference"""
         self.ref = other_ref
     
-
     def get_out(self):
         """return the name of the pickle output file"""
         return self.out
-
 
     def set_out(self, other_out):
         """set the name of the pickle output file"""
         self.out = other_out
 
-
     def load_data(self):
         """A simple method to retrieve the data structures"""
         return self._load_reads(), self._load_Ns()
-
 
     def _load_reads(self):
         """Gives a data structure that stores information about the
         clone, the chromosome of each clone and the count of mapping 
         reads in each bin of each chromosome (keeping trak of the bins)
-
-
-        Args:
-            folder (str): folder name 
-            bin_size (int): n_bases composing each bin
-            flags (list): list of bitwise-flags
-
 
         Return:
             reads_count (dict): dictionary containing each count of reads
@@ -174,25 +155,18 @@ class BinReadCounter:
             
         for i in range(len(clone_chrom_list[list(clone_chrom_list.keys())[0]])):
             id_bin.append(i)
-        df_bins = pd.DataFrame({"bin" : id_bin})
-        df_chrom = pd.DataFrame({"chr" : clone_chrom_list[list(clone_chrom_list.keys())[0]]})
+        df_bins = pd.DataFrame({"bin": id_bin})
+        df_chrom = pd.DataFrame({"chr": clone_chrom_list[list(clone_chrom_list.keys())[0]]})
         df_counts = pd.DataFrame(read_counts)
 
         read_count_df = pd.concat([df_chrom, df_bins, df_counts], axis=1)    
         return read_count_df
         
-    
     def _load_Ns(self):
         """Gives a data structure that store information about the number
         of 'N' bases in each bin (the same bin of the reads_count), per 
         chromosome.
 
-        
-        Args:
-            ref (str): the name of the reference file
-            bin_size (int): number of bases per each bin
-
-        
         Return:
             n_per_bin (dict): a dictionary containing the count of 'N's
                             per each chromosome, per each bin 
@@ -203,7 +177,7 @@ class BinReadCounter:
             chromosomes = []
             bins = []
             n_per_bin = []
-            # SimpleFastaParser is usefull for big fata files, because is
+            # SimpleFastaParser is useful for big fasta files, because is
             # a build-in method, faster than SeqIO.parse 
             for record in SimpleFastaParser(reference):
                 # record[0] = chrmosome name
@@ -211,26 +185,20 @@ class BinReadCounter:
                 # dividing each sequence in the same bins as the previous method
                 i += 1
                 bar_Ns.update(i)
-                split_seq = [record[1][x : self.bin_size] if x == 0 else record[1][x : x + self.bin_size] for x in range(0, len(record[1]), self.bin_size + 1)]
+                split_seq = [record[1][x : self.bin_size] if x == 0 else record[1][x: x + self.bin_size]
+                             for x in range(0, len(record[1]), self.bin_size + 1)]
                 for i in range(len(split_seq)):
                     chromosomes.append(record[0])
                     bins.append(i)
                     n_per_bin += [split_seq[i].count("N")]
 
-        n_count = pd.DataFrame({"chr" : chromosomes, "bin" : bins, "N_count" : n_per_bin})
+        n_count = pd.DataFrame({"chr": chromosomes, "bin": bins, "N_count": n_per_bin})
     
         return n_count
-         
 
     def load_read_ID(self):  
         """Gives information on the effective presence of the read mate in the
         same bin or not 
-
-        Args:
-            folder (str): the name of the folder in which the .bam files are saved
-            flags (list): list of string, where the string are the bitwise flags of
-                        the reads of interest
-            bin_size (int): the length of the bin
 
         Return:
             A pandas DataFrame with three columns, id, chr, mate_in_same_bin 
@@ -267,15 +235,9 @@ class BinReadCounter:
         print(len(ids), len(chr_location), len(mate_in_bin))
         print(len(read_id_df[read_id_df["mate_in_bin"] == "N"]))
         return read_id_df
-            
 
     def _load_pickle(self):
         """Retrieve information from the pickle file
-
-
-        Args:
-            out (str): the name of the output file, in pickle format
-
 
         Return:
             parameters (list): list of all the parameter's value
@@ -291,25 +253,9 @@ class BinReadCounter:
             data_structures = pickle.load(input_data)[-2:]
         return parameters, data_structures
 
-
     def _export_pickle(self):
         """Export a pickle file containing all the parameters used for
         the counts and the completed data structures
-
-
-        Args:
-            out (str): the name of the output file, in pickle format
-            _load_reads() (method): reads_count per bin, per chromosome,
-                                    per clone
-            _load_Ns() (method):'N' count per bin, per chromosome of the
-                                reference genome
-            bin_size (int): the number of bases that compose the bins
-                            (default = 250'000)
-            flags (list): list of string; each string is a bitwise-flag in 
-                        SAM format
-            folder (str): the folder in which retrieve the alignment files
-            ref (str): the name of the reference file
-
 
         Return:
             pickle_file (file): file in pickle format (binary) that can be
@@ -317,7 +263,7 @@ class BinReadCounter:
                                 data structures
         """                                     
         out_name = "BRAN" + str(self.bin_size) 
-        if self.get_flags() == ["0","16","99","147","163","83"]:
+        if self.get_flags() == ["0", "16", "99", "147", "163", "83"]:
             out_name += "_df_" + self.get_ref()[:2] + ".p"
         else:
             out_name += "_mf_" + self.get_ref()[:2] + ".p"
@@ -330,14 +276,14 @@ class BinReadCounter:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(usage="%(prog)s [options]",
-                                formatter_class=argparse.RawDescriptionHelpFormatter,
-                                description="",
-                                epilog="")
+                                     formatter_class=argparse.RawDescriptionHelpFormatter,
+                                     description="",
+                                     epilog="")
 
     parser.add_argument("-bs", "--bin_size",
                         type=int,
                         default=250000,
-                        help="The lenght of the segments that divide the chromosomes equally")
+                        help="The length of the segments that divide the chromosomes equally")
 
     parser.add_argument("-f", "--folder",
                         type=str,
@@ -347,21 +293,25 @@ if __name__ == "__main__":
     parser.add_argument("-fl", "--flag_list",
                         nargs="+",
                         default=["0","16","99","147","163","83"],
-                        help="""A list of the bitwise-flags in SAM format that identify the reads to be caunted during analyses""")
+                        help="""A list of the bitwise-flags in SAM format that identify the reads to be counted 
+                        during analyses""")
 
     parser.add_argument("-op", "--output_pickle", 
                         default=None,
-                        help="""If specified creates the pickle file cointanining all the parameters and the data_structures""")
+                        help="""If specified creates the pickle file cointanining all the parameters and the 
+                        data_structures""")
 
     parser.add_argument("-r", "--reference",
                         type=str,
                         default=None,
-                        help="""The path of the reference file, if not specified, the coverage is calculated with the mean of the mapping reads for all the samples""")
+                        help="""The path of the reference file, if not specified, the coverage is calculated with the 
+                        mean of the mapping reads for all the samples""")
 
     parser.add_argument("-i", "--read_info",
                         type=str,
                         default=None,
-                        help="""If specified, it returns a dataframe with information on the read ID, and if the read and its mate map in the same bin in the same chromosome""")
+                        help="""If specified, it returns a dataframe with information on the read ID, and if the read 
+                        and its mate map in the same bin in the same chromosome""")
 
     args = parser.parse_args()
     dict_args = vars(parser.parse_args([]))
@@ -383,6 +333,3 @@ if __name__ == "__main__":
     if args.read_info:
         print(counter.load_read_ID())
     
-    # print(counter._load_reads())
-    # print(counter._load_Ns())
-    # print(counter._load_pickle()[0])

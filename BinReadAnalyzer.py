@@ -1,4 +1,26 @@
-""" Bin read analyzer class"""
+# BinReadAnalyzer class
+#
+# This class aims to analyze the data structure created with the imported
+# class: BinReadCounter
+# One can consider this class as the very effector of the analysis on the
+# genome of the plant of interest. For analysis is intended, first of all,
+# the normalization of the raw_read_counts and than the detection of
+# statistically significant difference in terms of number of reads in bin,
+# that could lead to the identification of part of chromosome or even an
+# entire chromosome that have a significantly different count of reads;
+# proving that something in that region or chromosome is happened.
+#
+# The script first checks if already exist, in the folder of interest, a
+# pickle file; if so, the actual parameters and the parameters of the file
+# are compared --> if they are the same, the method _load_pickle() from
+# BinReadCounter is called and the data structures are available for the
+# analysis, otherwise the _export_pickle() method of BinReadCounter is
+# imported and the Counter starts to produce the data structures and the
+# new pickle file
+#
+# After that, on the basis of the parameters given by the user, visualization
+# plots are build up and shows in an as an interactive way via a web page;
+# also an offline version of all the plots is saved in an appropriate folder
 
 import os
 import argparse
@@ -13,6 +35,27 @@ stats = importr('stats')
 
 
 class BinReadAnalyzer:
+    """This class provides different analysis of the data coming form
+    BinReadCounter class; here imported.
+
+    Options:
+    -   plot read_counts for all chromosomes, for a specific one or for
+        a specific sample
+    -   normalize read_counts
+    -   plot normalized_read_counts for all chromosomes, for a specific
+        one or for a specific sample
+
+    Attributes:
+            folder_name: the folder in which the necessary files are stored
+            bin_size: the length of the bin in which each chromosome is
+                      divided (in bp)
+            ref_genome: a string being the name of the reference_genome file
+            flags: a list of string, each corresponding to a particular
+                   pairwise-flag in the .bam/.sam format
+            out_pickle: default is None because it takes the name of an
+                        already existing file or the name of a new file
+                        created during the running of the code
+    """
     def __init__(self, folder_name, bin_size, ref_genome, flags, out_pickle):
         self.folder = folder_name
         self.bin_size = bin_size
@@ -22,9 +65,21 @@ class BinReadAnalyzer:
         # self.control_file = None
 
     def load_data(self, verbose=False):
-        """If the pickle file is present and the parameters are not
-        changed, the data structures were kept otherwise it runs the
-        methods load_reads and loads_Ns of the imported class BinReadCounter
+        """If the pickle file is already present in the folder and the parameters
+        are not changed, the data structures were kept, otherwise it runs the
+        methods _export_pickle() and load_data() of the imported class BinReadCounter
+        in order to create a new pickle file and to import the corresponding
+        data-structures
+
+        Args:
+            verbose (bool): default is False, but if set to True, it allows to print
+                            and see if a pickle file is already present or if the
+                            Analyzer is running to create a new one
+
+        Returns:
+            A list of data structures from the pickle file or form the BinReadCounter;
+            the first data structure is the read_counts and the second is the N bases
+            count
         """
         counter = BinReadCounter(self.folder, self.bin_size, self.flags, self.ref, self.out)
         actual_params = [self.bin_size, self.flags, self.ref]
@@ -64,6 +119,20 @@ class BinReadAnalyzer:
             return counter._load_pickle()[1]
 
     def add_ns_trace(self, fig, chrom=None):
+        """This method is used in other plotting methods, in order to add the
+        representation of N bases in the same plot
+
+        Args:
+            fig (obj): is a go.Figure() object, taken from the different plot
+                       methods, it represent the figure to which add the Ns
+                       representation
+            chrom (int): is a parameter of the script; it is different from None
+                        in those methods that uses this information to build up
+                        the plot
+
+        Returns:
+            A trace to add
+        """
         count_N_df = self.load_data()[1]
         if chrom != None:
             single_chrom_N = count_N_df[count_N_df["chr"] == "CH.chr" + str(chrom)]
@@ -79,10 +148,21 @@ class BinReadAnalyzer:
                                             name="N_counts"))
 
     def plot_chrom_sample(self, chrom, sample, ns=False, fig=go.Figure()):
-        read_df = self.load_data()[0]
+        """This method allows to obtain a scatter-plot of raw read_counts
+        for a specific chromosome and a specific sample
 
-        if not os.path.exists("plots"):
-            os.mkdir("plots")
+        Args:
+            chrom (int): a number representing the chromosome of interest
+            sample (str): the name of the sample of interest (it corresponds
+                          to the name of the column in the data structure)
+            ns (bool): by default sets to False, but is one want to include
+                       the Ns count trace, it has to set to True
+            fig (obj): is a go.Figure() object for the building of the plot
+
+        Returns:
+            A scatter-plot of counts
+        """
+        read_df = self.load_data()[0]
 
         fig.update_xaxes(title_text="Chromosomes_Bins")
         fig.update_yaxes(title_text="Read_Count_Per_Bin")
@@ -105,10 +185,19 @@ class BinReadAnalyzer:
         fig.show()
 
     def plot_chromosome(self, chrom, ns=False, fig=go.Figure()):
-        read_df = self.load_data()[0]
+        """This method allows to obtain a scatter-plot of raw_read_counts
+        of all samples, but for a specific chromosome of interest
 
-        if not os.path.exists("plots"):
-            os.mkdir("plots")
+        Args:
+            chrom (int): a number representing the chromosome of interest
+            ns (bool): by default sets to False, but is one want to include
+                       the Ns count trace, it has to set to True
+            fig (obj): is a go.Figure() object for the building of the plot
+
+        Returns:
+            A scatter-plot of counts
+        """
+        read_df = self.load_data()[0]
 
         fig.update_xaxes(title_text="Chromosomes_Bins")
         fig.update_yaxes(title_text="Read_Count_Per_Bin")
@@ -130,10 +219,20 @@ class BinReadAnalyzer:
         fig.show()
 
     def plot_sample(self, sample, ns=False, fig=go.Figure()):
-        read_df = self.load_data()[0]
+        """This method allows to obtain a scatter-plot of raw_read_counts
+        of all chromosomes, but for a specific sample of interest
 
-        if not os.path.exists("plots"):
-            os.mkdir("plots")
+        Args:
+            sample (str): the name of the sample of interest (it corresponds
+                          to the name of the column in the data structure)
+            ns (bool): by default sets to False, but is one want to include
+                       the Ns count trace, it has to set to True
+            fig (obj): is a go.Figure() object for the building of the plot
+
+        Returns:
+            A scatter-plot of counts
+        """
+        read_df = self.load_data()[0]
 
         fig.update_xaxes(title_text="Chromosomes_Bins")
         fig.update_yaxes(title_text="Read_Count_Per_Bin")
@@ -153,13 +252,20 @@ class BinReadAnalyzer:
 
         fig.show()
 
-    def plot_all(self, ns=False):
+    def plot_all(self, ns=False, fig=go.Figure()):
+        """This method allows to obtain a scatter-plot of raw_read_counts
+        of all chromosomes and all samples
+
+        Args:
+            ns (bool): by default sets to False, but is one want to include
+                       the Ns count trace, it has to set to True
+            fig (obj): is a go.Figure() object for the building of the plot
+
+        Returns:
+            A scatter-plot of counts
+        """
         read_df = self.load_data()[0]
 
-        if not os.path.exists("plots"):
-            os.mkdir("plots")
-
-        fig = go.Figure()
         fig.update_xaxes(title_text="Chromosomes_Bins")
         fig.update_yaxes(title_text="Read_Count_Per_Bin")
 
@@ -180,44 +286,44 @@ class BinReadAnalyzer:
         fig.show()
 
     def normalize_bins(self):
-
+        """This method handles the normalization of the raw read_counts
+        using an R package, edgeR, imported thanks to rpy2 that provides
+        an already implemented function, cpm, for the normalization of a
+        table of counts, as well as a series of other function specifically
+        implemented for RNA-Seq"""
         read_counts = self.load_data()[0]
         # the following line has to be deleted when the class will work on the entire .bam files
         chr1 = read_counts[read_counts['chr'] == 'CH.chr1']
+        # the edgeR package is imported using rpy2 syntax to access to all its built-in functions
         edger = rpackages.importr('edgeR')
-        read_counts_edger = {}
+        read_counts_edger = {}  # a dictionary of sample: vector_of_counts to work with edger
         col_list = list(chr1.columns)
         for i in range(len(col_list)):
             if col_list[i] != "chr" and col_list[i] != 'bin':
-                read_counts_edger[col_list[i]] = robjects.IntVector(chr1[col_list[i]])  # include after testing
+                read_counts_edger[col_list[i]] = robjects.IntVector(chr1[col_list[i]])
 
         read_counts_edger_df = robjects.DataFrame(read_counts_edger)
-
-        # in order to obtain a normalized counts table, is not necessary
-        # have a DGEList object, it is sufficient to have a table of raw
-        # count as in this case
-        # summarized = edger.DGEList(counts=read_counts_edger_df)
-        # norm_counts = edger.cpm(summarized, normalized_lib_sizes=False)
-
         norm_counts = edger.cpm(read_counts_edger_df, normalized_lib_sizes=True)
 
-        # log_cpm = edger.cpm(summarized, log=True) NOT NECESSARY
-        # norm_factors = edger.calcNormFactors(summarized) NOT NECESSARY
-        # pseudo_counts = edger.estimateCommonDisp(norm_factors) NOT USEFUL NOT NORM_COUNTS
-        # print(norm_counts.rx(True, 1)) in other cases useful in selecting an entire column
-        return norm_counts
-
-        # d = {'bin': robjects.IntVector(chr1['bin']), 'counts': robjects.IntVector(chr1['Ch15_3_1_ref_IlluminaPE_aligns
-        # _Primary_chr1'])}
+        return norm_counts  # an edger object (table) of counts
 
     def plot_norm_data_chr_sample(self, chrom, sample, ns=False, fig=go.Figure()):
-        if not os.path.exists("plots"):
-            os.mkdir("plots")
+        """This method allows to obtain a scatter-plot of normalized_read_counts
+        of a specific chromosome of a specific sample
+
+        Args:
+            chrom (int): a number representing the chromosome of interest
+            sample (str): the name of the sample of interest (it corresponds
+                          to the name of the column in the data structure)
+            ns (bool): by default sets to False, but is one want to include
+                       the Ns count trace, it has to set to True
+            fig (obj): is a go.Figure() object for the building of the plot
+
+        Returns:
+            A scatter-plot of normalized counts
+        """
         read_counts = self.load_data()[0]
         norm_counts = self.normalize_bins()
-
-        if not os.path.exists("plots"):
-            os.mkdir("plots")
 
         fig.update_xaxes(title_text="Chromosomes_Bins")
         fig.update_yaxes(title_text="Norm_Read_Count_Per_Bin")
@@ -240,9 +346,18 @@ class BinReadAnalyzer:
         fig.show()
 
     def plot_norm_data_chr(self, chrom, ns=False, fig=go.Figure()):
-        if not os.path.exists("plots"):
-            os.mkdir("plots")
+        """This method allows to obtain a scatter-plot of normalized_read_counts
+        of a specific chromosome for all samples
 
+        Args:
+            chrom (int): a number representing the chromosome of interest
+            ns (bool): by default sets to False, but is one want to include
+                       the Ns count trace, it has to set to True
+            fig (obj): is a go.Figure() object for the building of the plot
+
+        Returns:
+            A scatter-plot of normalized counts
+        """
         read_counts = self.load_data()[0]
         norm_counts = self.normalize_bins()
 
@@ -265,8 +380,19 @@ class BinReadAnalyzer:
         fig.show()
 
     def plot_norm_data_sample(self, sample, ns=False, fig=go.Figure()):
-        if not os.path.exists("plots"):
-            os.mkdir("plots")
+        """This method allows to obtain a scatter-plot of normalized_read_counts
+        in all chromosomes of a specific sample
+
+        Args:
+            sample (str): the name of the sample of interest (it corresponds
+                          to the name of the column in the data structure)
+            ns (bool): by default sets to False, but is one want to include
+                       the Ns count trace, it has to set to True
+            fig (obj): is a go.Figure() object for the building of the plot
+
+        Returns:
+            A scatter-plot of normalized counts
+        """
         read_counts = self.load_data()[0]
         norm_counts = self.normalize_bins()
         fig.update_xaxes(title_text="Chromosomes_Bins")
@@ -291,9 +417,17 @@ class BinReadAnalyzer:
         fig.show()
 
     def plot_norm_data_all(self, ns=False, fig=go.Figure()):
-        if not os.path.exists("plots"):
-            os.mkdir("plots")
+        """This method allows to obtain a scatter-plot of normalized_read_counts
+        in all chromosomes and for all samples
 
+        Args:
+            ns (bool): by default sets to False, but is one want to include
+                       the Ns count trace, it has to set to True
+            fig (obj): is a go.Figure() object for the building of the plot
+
+        Returns:
+            A scatter-plot of normalized counts
+        """
         read_counts = self.load_data()[0]
         norm_counts = self.normalize_bins()
         col_list = list(read_counts.columns)
@@ -341,16 +475,19 @@ if __name__ == "__main__":
     parser.add_argument("-fl", "--flag_list",
                         nargs="+",
                         default=["0","16","99","147","163","83"],
-                        help="""A list of the bitwise-flags in SAM format that identify the reads to be caunted during analyses""")
+                        help="""A list of the bitwise-flags in SAM format that identify the reads to be caunted 
+                        during analyses""")
 
     parser.add_argument("-op", "--output_pickle", 
                         default=None,
-                        help="""If specified creates the pickle file cointanining all the parameters and the data_structures""")
+                        help="""If specified creates the pickle file containing all the parameters and the 
+                        data_structures""")
 
     parser.add_argument("-r", "--reference",
                         type=str,
                         default="chardonnay_primary_contigs_chromosome-order.fa.gz",
-                        help="""The path of the reference file, if not specified, the coverage is calculated with the mean of the mapping reads for all the samples""")
+                        help="""The path of the reference file, if not specified, the coverage is calculated with the 
+                        mean of the mapping reads for all the samples""")
 
     parser.add_argument("-ch", "--chromosome",
                         default=None,
@@ -379,6 +516,9 @@ if __name__ == "__main__":
     analyzer = BinReadAnalyzer(args.folder, args.bin_size, args.reference, flags, args.output_pickle)
 
     analyzer.load_data(verbose=True)
+
+    if not os.path.exists("plots"):
+        os.mkdir("plots")
 
     if args.chromosome and args.sample:
         if args.Ns_count:
