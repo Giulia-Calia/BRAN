@@ -133,7 +133,9 @@ class BinReadAnalyzer:
         Returns:
             A trace to add
         """
-        count_N_df = self.load_data()[1]
+        count_N_df = self.load_data()[1]  # second data structure
+        # if the chromosome is specified, the trace that could be added
+        # have to contain only N counts for that specific chromosome
         if chrom != None:
             single_chrom_N = count_N_df[count_N_df["chr"] == "CH.chr" + str(chrom)]
             return fig.add_trace(go.Scatter(x=single_chrom_N["bin"],
@@ -214,7 +216,7 @@ class BinReadAnalyzer:
             self.add_ns_trace(fig, chrom=chrom)
 
         fig.update_layout(title="Read Counts - All Clones - Chr: " + str(chrom) + " - Bin Size: " + str(self.bin_size))
-        fig.write_image("plots/counts_chr" + str(chrom) + "_all_" + str(self.bin_size) + ".pdf")
+        # fig.write_image("plots/counts_chr" + str(chrom) + "_all_" + str(self.bin_size) + ".pdf")
 
         fig.show()
 
@@ -281,7 +283,7 @@ class BinReadAnalyzer:
             self.add_ns_trace(fig)
 
         fig.update_layout(title="Read Counts - All Clones - All Chromosomes - Bin Size: " + str(self.bin_size))
-        fig.write_image("plots/counts_all_" + str(self.bin_size) + ".pdf")
+#         # fig.write_image("plots/counts_all_" + str(self.bin_size) + ".pdf")
 
         fig.show()
 
@@ -458,30 +460,30 @@ if __name__ == "__main__":
     # ad an argument to argparse, with the name of the file as control for the normalization
 
     parser = argparse.ArgumentParser(usage="%(prog)s [options]",
-                            formatter_class=argparse.RawDescriptionHelpFormatter,
-                            description="",
-                            epilog="")
+                                     formatter_class=argparse.RawDescriptionHelpFormatter,
+                                     description="",
+                                     epilog="")
 
     parser.add_argument("-bs", "--bin_size",
                         type=int,
                         default=250000,
-                        help="The lenght of the segments that divide the chromosomes equally")
+                        help="The length of the segments that divide the chromosomes equally")
 
     parser.add_argument("-f", "--folder",
                         type=str,
                         default="./",
-                        help="The name of the path to the folder in which the files to be analyzed are situated")
+                        help="The path to the folder in which are situated the files to be analyzed (.bam)")
 
     parser.add_argument("-fl", "--flag_list",
                         nargs="+",
-                        default=["0","16","99","147","163","83"],
-                        help="""A list of the bitwise-flags in SAM format that identify the reads to be caunted 
-                        during analyses""")
+                        default=["0", "16", "99", "147", "163", "83"],
+                        help="""A list of the bitwise-flags in SAM format that identify the reads to be counted 
+                        during analyses; if different flags wants to be added, add them as strings 
+                        (e.g. "177" "129")""")
 
     parser.add_argument("-op", "--output_pickle", 
-                        default=None,
-                        help="""If specified creates the pickle file containing all the parameters and the 
-                        data_structures""")
+                        default='./',
+                        help="The folder path to which search the pickle file already created")
 
     parser.add_argument("-r", "--reference",
                         type=str,
@@ -497,7 +499,7 @@ if __name__ == "__main__":
     parser.add_argument("-s", "--sample", 
                         default=None,
                         type=str,
-                        help="""The name of the clone of interest for the plot of counts""")
+                        help="""[optional] - The name of the clone of interest for the plot of counts""")
 
     parser.add_argument("-N", "--Ns_count",
                         default=None,
@@ -511,8 +513,7 @@ if __name__ == "__main__":
         flags = dict_args["flag_list"] + args.flag_list
     else:
         flags = args.flag_list
-    
-    
+
     analyzer = BinReadAnalyzer(args.folder, args.bin_size, args.reference, flags, args.output_pickle)
 
     analyzer.load_data(verbose=True)
