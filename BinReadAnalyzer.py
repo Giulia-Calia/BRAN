@@ -112,8 +112,8 @@ class BinReadAnalyzer:
             # the modules of the BinReadCounter to calculate the new data structures
             # and it saves a new pickle file
             if verbose:
-                print("Parameters are changed\n",
-                      "BinReadCounter is running with actual parameters\n",
+                print("Parameters are changed or no pickle file exists",
+                      "BinReadCounter is running with actual parameters",
                       "IT COULD TAKE A WHILE to create and import the pickle file")
             counter._export_pickle()
             return counter._load_pickle()[1]
