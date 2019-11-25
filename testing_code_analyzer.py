@@ -1,4 +1,7 @@
-""" Bin read analyzer class"""
+# A raw version of the bin read analyzer this script is essentially used
+# to verify that the original analyzer will work correctly
+# if it will be possible, it will be truly a testing_code, with test done
+# with unittest
 
 import pickle
 import os

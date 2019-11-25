@@ -1,19 +1,7 @@
-# Bin Reads Counter Class
-# 
-# This class aims to first divide the chromosomes into small pieces (bins),
-# of about 0.25 Mb as default, and then count the number of desired reads
-# that fall into each bin. This information is saved in an appropiate data
-# structure that keep trak of the clone-name, the chromosome of interest
-# and the bins for each chromosome.
-# 
-# Due to the importance of "N" bases in the genome, also the count for these
-# bases is take as a record for the counts-normalization, storing each count
-# in another data structure that gives inforamtion on the chromosome and the 
-# count of "N" bases in each bin of it.
-# 
-# The data structure as well as their paramerers, are saved in a binary file
-# created with pickle library, in order to facilitate future works on the 
-# structures. 
+# A raw version of the bin read counter, this script is essentially used
+# to verify that the original counter will work correctly
+# if it will be possible, it will be truly a testing_code, with test done
+# with unittest
 
 import argparse
 import os
