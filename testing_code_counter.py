@@ -294,8 +294,10 @@ class BinReadCounter:
         bar_reads = progressbar.ProgressBar(max_value=progressbar.UnknownLength)
         i = 0
         list_chrom = []
-        id_bin = {}
+        chrom_column = {}
+        bin_column = {}
         read_counts = {}
+        read_counts_concat = {}
         read_pos = 0
         dir_list = os.listdir(self.folder)
         for el in dir_list:
@@ -305,54 +307,64 @@ class BinReadCounter:
                 # process is faster
                 samfile = pysam.AlignmentFile(el, "rb")
                 clone = el[:el.find(".")]  # name of sample columns
-                read_counts[clone] = []
                 # clone_chrom_list["chr"] = []
-                id_bin["bin"] = {}
+                read_counts[clone] = []
+                read_counts_concat[clone] = []
+                chrom_column[clone] = []
+                bin_column[clone] = []
                 header = samfile.header["SQ"]
 
                 for line in header:
                     chr_name = line["SN"]
                     chr_length = line["LN"]
-                    id_bin["bin"][chr_name] = []
                     if chr_name not in list_chrom:
                         list_chrom.append(chr_name)
                     bins = chr_length // self.bin_size + 1
-                    # id_bin[clone].append([0] * bins)
+                    # read_counts[clone].append([0] * bins)
+                    read_counts[clone].append([0] * bins)
+                # print(read_counts)
                     for i in range(bins):
-                        # clone_chrom_list["chr"].append(chr_name)
-                        read_counts[clone].append(0)
-                        id_bin["bin"][chr_name].append(0)
-
+                        chrom_column[clone].append(chr_name)
+                        bin_column[clone].append(str(i))
                 for chrom in list_chrom:
-                    ch = id_bin["bin"][chrom]
-                    if ch:
-                        for read in samfile.fetch():
-                            i += 1
-                            bar_reads.update(i)
-                            if str(read.flag) in self.flags:
-                                bit_flag = bin(int(read.flag))  # binary format more easy to check
-                                if bit_flag[-4] == "1":
-                                    read_pos = int(read.reference_start) + len(read.query_sequence) - 1
-                                else:
-                                    read_pos = int(read.reference_start)
-                                # Place the read in the right bin
-                                #
-                                # Dividing the read position for the length of the bin, the exact bin in
-                                # which the read maps is obtained
-                                #
-                                # The corresponding element of the list is set to 1 if no other reads
-                                # mapped in that bin before and incremented by 1 otherwise
-
-                                # here i have to check for the chromosome, otherwise the count goes always to the first bins
-                                bin_location = read_pos // self.bin_size
-                                ch[int(bin_location)] += 1
-
+                    # for each chromosome in the file = each chromosome in the dictionary,
+                    # at position = bin_location in the list of the chromosome, the element
+                    # increments of one
+                    for read in samfile.fetch(chrom):
+                        i += 1
+                        bar_reads.update(i)
+                        if str(read.flag) in self.flags:
+                            bit_flag = bin(int(read.flag))  # binary format more easy to check
+                            if bit_flag[-4] == "1":
+                                read_pos = int(read.reference_start) + len(read.query_sequence) - 1
                             else:
-                                continue
+                                read_pos = int(read.reference_start)
+                            # Place the read in the right bin
+                            #
+                            # Dividing the read position for the length of the bin, the exact bin in
+                            # which the read maps is obtained
+                            #
+                            # The corresponding element of the list is set to 1 if no other reads
+                            # mapped in that bin before and incremented by 1 otherwise
 
+                            # here i have to check for the chromosome, otherwise the count goes always to the first bins
+                            bin_location = read_pos // self.bin_size
+                            # print(bin_location)
+                            read_counts[clone][list_chrom.index(chrom)][int(bin_location)] += 1
+
+                        else:
+                            continue
+
+                for counts in read_counts[clone]:
+                    read_counts_concat[clone] += counts
                 samfile.close()
+        # print(read_counts_concat)
         # print(clone_chrom_list)
-        # print(id_bin)
+        # print(read_counts)
+
+        read_counts_concat_df = pd.DataFrame(read_counts_concat)
+        chrom_column_df = pd.DataFrame({"chr": chrom_column[list(chrom_column.keys())[0]]})
+        bin_column_df = pd.DataFrame({"bin": bin_column[list(bin_column.keys())[0]]})
         # df_chr = pd.DataFrame(clone_chrom_list)
         # df_bin = pd.DataFrame(id_bin)
         # df_chr_bin = pd.concat([df_chr, df_bin], axis=1)
@@ -365,7 +377,9 @@ class BinReadCounter:
         # df_chrom = pd.DataFrame({"chr": clone_chrom_list[list(clone_chrom_list.keys())[0]]})
         # df_counts = pd.DataFrame(read_counts)
         #
-        # read_count_df = pd.concat([df_chrom, df_bins, df_counts], axis=1)
+        read_count_df = pd.concat([chrom_column_df, bin_column_df, read_counts_concat_df], axis=1)
+        print(read_count_df)
+
         # return read_count_df
 
     def _load_Ns(self):
