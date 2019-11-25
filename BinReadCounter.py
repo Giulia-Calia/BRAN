@@ -345,3 +345,9 @@ if __name__ == "__main__":
     if args.read_info:
         print(counter.load_read_ID())
     
+    # ----------------------------------------
+    # see if it is possible to optimize the _load_rids()
+    # possible problems with plots
+    # verify no problems with pickele export
+    # verify also N counts
+    # -----------------------------------------
