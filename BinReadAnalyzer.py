@@ -552,38 +552,38 @@ if __name__ == "__main__":
     analyzer = BinReadAnalyzer(args.folder, args.bin_size, args.reference, flags, args.output_pickle)
 
     analyzer.load_data(reference=args.reference, read_info=args.read_info, verbose=True)
-    # analyzer.normalize_bins()
-    # if not os.path.exists("plots"):
-    #     os.mkdir("plots")
-    #
-    # if args.chromosome and args.sample:
-    #     if args.Ns_count:
-    #         analyzer.plot_chrom_sample(args.reference, args.chromosome, args.sample, args.Ns_count)
-    #         analyzer.plot_norm_data_chr_sample(args.reference, args.chromosome, args.sample, args.Ns_count)
-    #     else:
-    #         analyzer.plot_chrom_sample(args.reference, args.chromosome, args.sample)
-    #         analyzer.plot_norm_data_chr_sample(args.reference, args.chromosome, args.sample)
-    #
-    # elif args.chromosome:
-    #     if args.Ns_count:
-    #         analyzer.plot_chromosome(args.reference, args.chromosome, args.Ns_count)
-    #         analyzer.plot_norm_data_chr(args.reference, args.chromosome, args.Ns_count)
-    #     else:
-    #         analyzer.plot_chromosome(args.reference, args.chromosome)
-    #         analyzer.plot_norm_data_chr(args.reference, args.chromosome)
-    #
-    # elif args.sample:
-    #     if args.Ns_count:
-    #         analyzer.plot_sample(args.reference, args.sample, args.Ns_count)
-    #         analyzer.plot_norm_data_sample(args.reference, args.sample, args.Ns_count)
-    #     else:
-    #         analyzer.plot_sample(args.reference, args.sample)
-    #         analyzer.plot_norm_data_sample(args.reference, args.sample)
-    #
-    # else:
-    #     if args.Ns_count:
-    #         analyzer.plot_all(args.reference, args.Ns_count)
-    #         analyzer.plot_norm_data_all(args.reference, args.Ns_count)
-    #     else:
-    #         analyzer.plot_all(args.reference)
-    #         analyzer.plot_norm_data_all(args.reference)
+    analyzer.normalize_bins()
+    if not os.path.exists("plots"):
+        os.mkdir("plots")
+
+    if args.chromosome and args.sample:
+        if args.Ns_count:
+            analyzer.plot_chrom_sample(args.reference, args.chromosome, args.sample, args.Ns_count)
+            analyzer.plot_norm_data_chr_sample(args.reference, args.chromosome, args.sample, args.Ns_count)
+        else:
+            analyzer.plot_chrom_sample(args.reference, args.chromosome, args.sample)
+            analyzer.plot_norm_data_chr_sample(args.reference, args.chromosome, args.sample)
+
+    elif args.chromosome:
+        if args.Ns_count:
+            analyzer.plot_chromosome(args.reference, args.chromosome, args.Ns_count)
+            analyzer.plot_norm_data_chr(args.reference, args.chromosome, args.Ns_count)
+        else:
+            analyzer.plot_chromosome(args.reference, args.chromosome)
+            analyzer.plot_norm_data_chr(args.reference, args.chromosome)
+
+    elif args.sample:
+        if args.Ns_count:
+            analyzer.plot_sample(args.reference, args.sample, args.Ns_count)
+            analyzer.plot_norm_data_sample(args.reference, args.sample, args.Ns_count)
+        else:
+            analyzer.plot_sample(args.reference, args.sample)
+            analyzer.plot_norm_data_sample(args.reference, args.sample)
+
+    else:
+        if args.Ns_count:
+            analyzer.plot_all(args.reference, args.Ns_count)
+            analyzer.plot_norm_data_all(args.reference, args.Ns_count)
+        else:
+            analyzer.plot_all(args.reference)
+            analyzer.plot_norm_data_all(args.reference)
