@@ -38,8 +38,8 @@ class BinReadCounter:
         ref (str): the path to the reference file
         out (str): the name of the output file in pickle format 
     """
-    def __init__(self, folder, bin_size, flag_list, reference, out_pickle):
-        self.folder = folder 
+    def __init__(self, bam_folder_path, bin_size, flag_list, reference, out_pickle):
+        self.folder = bam_folder_path
         self.bin_size = bin_size
         self.flags = flag_list
         self.ref = reference
@@ -79,7 +79,7 @@ class BinReadCounter:
 
     def get_ref_name(self):
         """return the name of the reference file"""
-        if "/" in self.ref:
+        if self.ref is not None and "/" in self.ref:
             ref_name = self.ref[self.ref.rfind("/") + 1:]
             return ref_name
         else:
@@ -156,7 +156,7 @@ class BinReadCounter:
                 # here pysam is used in order to be able to work on .bam files,
                 # that have a lower weight with respect to .sam files; thus the
                 # process is faster
-                samfile = pysam.AlignmentFile(el, "rb")
+                samfile = pysam.AlignmentFile(self.folder + el, "rb")
                 header = samfile.header["SQ"]
                 clone = el[:el.find(".")]  # name of sample = columns
                 read_counts[clone] = []
@@ -280,7 +280,7 @@ class BinReadCounter:
             if el.endswith(".bam"):
                 bar_id = progressbar.ProgressBar(max_value=progressbar.UnknownLength)
                 i = 0
-                samfile = pysam.AlignmentFile(el, "rb")
+                samfile = pysam.AlignmentFile(self.folder + el, "rb")
                 for read in samfile.fetch():
                     # progress bar updating
                     i += 1
@@ -316,7 +316,7 @@ class BinReadCounter:
             out_data (dict): a dictionary containing all the parameters and the data
                             structures required by the user
         """
-        with open(file_name, "rb") as input_param:
+        with open(self.out + file_name, "rb") as input_param:
             return pickle.load(input_param)
 
     def _export_pickle(self, reference=False, read_info=False):
@@ -420,5 +420,4 @@ if __name__ == "__main__":
 
     # ----------------------------------------
     # see if it is possible to optimize the _load_reads()
-    # possible problems with plots
     # -----------------------------------------

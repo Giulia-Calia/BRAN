@@ -47,7 +47,7 @@ class BinReadAnalyzer:
         one or for a specific sample
 
     Attributes:
-            folder_name: the folder in which the necessary files are stored
+            folder_path: the folder in which the necessary files are stored
             bin_size: the length of the bin in which each chromosome is
                       divided (in bp)
             ref_genome: a string being the name of the reference_genome file
@@ -58,8 +58,8 @@ class BinReadAnalyzer:
                         created during the running of the code
     """
 
-    def __init__(self, folder_name, bin_size, ref_genome, flags, out_pickle):
-        self.folder = folder_name
+    def __init__(self, bam_folder_path, bin_size, ref_genome, flags, out_pickle):
+        self.folder = bam_folder_path
         self.bin_size = bin_size
         self.flags = flags
         self.ref = ref_genome
@@ -95,13 +95,14 @@ class BinReadAnalyzer:
         counter = BinReadCounter(self.folder, self.bin_size, self.flags, self.ref, self.out)
         found = False
         bam_files = []
-        list_dir = os.listdir(self.folder)
+        list_bam_dir = os.listdir(self.folder)
+        list_pick_dir = os.listdir(self.out)
         # verify if a pickle file is present in the desired folder
-        for file in list_dir:
+        for file in list_bam_dir:
             if file.endswith(".bam"):
                 bam_files.append(file[:file.find(".bam")])
 
-        for file in list_dir:
+        for file in list_pick_dir:
             if file.endswith(".p"):
                 # if so, checks if the parameters for the building-up of
                 # the previous pickle file, are the same as the actual ones
@@ -161,6 +162,7 @@ class BinReadAnalyzer:
         representation of N bases in the same plot
 
         Args:
+            reference (bool): true if the reference is declared
             fig (obj): is a go.Figure() object, taken from the different plot
                        methods, it represent the figure to which add the Ns
                        representation
@@ -195,6 +197,7 @@ class BinReadAnalyzer:
         for a specific chromosome and a specific sample
 
         Args:
+            reference (bool): true if the reference is declared
             chrom (int): a number representing the chromosome of interest
             sample (str): the name of the sample of interest (it corresponds
                           to the name of the column in the data structure)
@@ -232,6 +235,7 @@ class BinReadAnalyzer:
         of all samples, but for a specific chromosome of interest
 
         Args:
+            reference (bool): true if the reference is declared
             chrom (int): a number representing the chromosome of interest
             ns (bool): by default sets to False, but is one want to include
                        the Ns count trace, it has to set to True
@@ -265,6 +269,7 @@ class BinReadAnalyzer:
         of all chromosomes, but for a specific sample of interest
 
         Args:
+            reference (bool): true if the reference is declared
             sample (str): the name of the sample of interest (it corresponds
                           to the name of the column in the data structure)
             ns (bool): by default sets to False, but is one want to include
@@ -299,6 +304,7 @@ class BinReadAnalyzer:
         of all chromosomes and all samples
 
         Args:
+            reference (bool): true if the reference is declared
             ns (bool): by default sets to False, but is one want to include
                        the Ns count trace, it has to set to True
             fig (obj): is a go.Figure() object for the building of the plot
@@ -331,6 +337,7 @@ class BinReadAnalyzer:
         of a specific chromosome of a specific sample
 
         Args:
+            reference (bool): true if the reference is declared
             chrom (int): a number representing the chromosome of interest
             sample (str): the name of the sample of interest (it corresponds
                           to the name of the column in the data structure)
@@ -372,6 +379,7 @@ class BinReadAnalyzer:
         of a specific chromosome for all samples
 
         Args:
+            reference (bool): true if the reference is declared
             chrom (int): a number representing the chromosome of interest
             ns (bool): by default sets to False, but is one want to include
                        the Ns count trace, it has to set to True
@@ -407,6 +415,7 @@ class BinReadAnalyzer:
         in all chromosomes of a specific sample
 
         Args:
+            reference (bool): true if the reference is declared
             sample (str): the name of the sample of interest (it corresponds
                           to the name of the column in the data structure)
             ns (bool): by default sets to False, but is one want to include
@@ -445,6 +454,7 @@ class BinReadAnalyzer:
         in all chromosomes and for all samples
 
         Args:
+            reference (bool): true if the reference is declared
             ns (bool): by default sets to False, but is one want to include
                        the Ns count trace, it has to set to True
             fig (obj): is a go.Figure() object for the building of the plot
@@ -542,38 +552,38 @@ if __name__ == "__main__":
     analyzer = BinReadAnalyzer(args.folder, args.bin_size, args.reference, flags, args.output_pickle)
 
     analyzer.load_data(reference=args.reference, read_info=args.read_info, verbose=True)
-    analyzer.normalize_bins()
-    if not os.path.exists("plots"):
-        os.mkdir("plots")
-
-    if args.chromosome and args.sample:
-        if args.Ns_count:
-            analyzer.plot_chrom_sample(args.reference, args.chromosome, args.sample, args.Ns_count)
-            analyzer.plot_norm_data_chr_sample(args.reference, args.chromosome, args.sample, args.Ns_count)
-        else:
-            analyzer.plot_chrom_sample(args.reference, args.chromosome, args.sample)
-            analyzer.plot_norm_data_chr_sample(args.reference, args.chromosome, args.sample)
-
-    elif args.chromosome:
-        if args.Ns_count:
-            analyzer.plot_chromosome(args.reference, args.chromosome, args.Ns_count)
-            analyzer.plot_norm_data_chr(args.reference, args.chromosome, args.Ns_count)
-        else:
-            analyzer.plot_chromosome(args.reference, args.chromosome)
-            analyzer.plot_norm_data_chr(args.reference, args.chromosome)
-
-    elif args.sample:
-        if args.Ns_count:
-            analyzer.plot_sample(args.reference, args.sample, args.Ns_count)
-            analyzer.plot_norm_data_sample(args.reference, args.sample, args.Ns_count)
-        else:
-            analyzer.plot_sample(args.reference, args.sample)
-            analyzer.plot_norm_data_sample(args.reference, args.sample)
-
-    else:
-        if args.Ns_count:
-            analyzer.plot_all(args.reference, args.Ns_count)
-            analyzer.plot_norm_data_all(args.reference, args.Ns_count)
-        else:
-            analyzer.plot_all(args.reference)
-            analyzer.plot_norm_data_all(args.reference)
+    # analyzer.normalize_bins()
+    # if not os.path.exists("plots"):
+    #     os.mkdir("plots")
+    #
+    # if args.chromosome and args.sample:
+    #     if args.Ns_count:
+    #         analyzer.plot_chrom_sample(args.reference, args.chromosome, args.sample, args.Ns_count)
+    #         analyzer.plot_norm_data_chr_sample(args.reference, args.chromosome, args.sample, args.Ns_count)
+    #     else:
+    #         analyzer.plot_chrom_sample(args.reference, args.chromosome, args.sample)
+    #         analyzer.plot_norm_data_chr_sample(args.reference, args.chromosome, args.sample)
+    #
+    # elif args.chromosome:
+    #     if args.Ns_count:
+    #         analyzer.plot_chromosome(args.reference, args.chromosome, args.Ns_count)
+    #         analyzer.plot_norm_data_chr(args.reference, args.chromosome, args.Ns_count)
+    #     else:
+    #         analyzer.plot_chromosome(args.reference, args.chromosome)
+    #         analyzer.plot_norm_data_chr(args.reference, args.chromosome)
+    #
+    # elif args.sample:
+    #     if args.Ns_count:
+    #         analyzer.plot_sample(args.reference, args.sample, args.Ns_count)
+    #         analyzer.plot_norm_data_sample(args.reference, args.sample, args.Ns_count)
+    #     else:
+    #         analyzer.plot_sample(args.reference, args.sample)
+    #         analyzer.plot_norm_data_sample(args.reference, args.sample)
+    #
+    # else:
+    #     if args.Ns_count:
+    #         analyzer.plot_all(args.reference, args.Ns_count)
+    #         analyzer.plot_norm_data_all(args.reference, args.Ns_count)
+    #     else:
+    #         analyzer.plot_all(args.reference)
+    #         analyzer.plot_norm_data_all(args.reference)
