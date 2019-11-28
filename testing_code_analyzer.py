@@ -13,7 +13,7 @@ import plotly
 import plotly.graph_objects as go
 import plotly.io as pio
 from Bio.SeqIO.FastaIO import SimpleFastaParser
-from BinReadCounter import BinReadCounter
+from testing_code_counter import BinReadCounter
 import rpy2.robjects as robjects
 import rpy2.robjects.packages as rpackages
 from rpy2.robjects.vectors import FactorVector, StrVector, IntVector
