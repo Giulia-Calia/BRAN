@@ -22,10 +22,16 @@ import pickle
 import pandas as pd
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 import pysam
-import progressbar  # in readme insert progressbar2 not progressbar
+import progressbar
 
-
+# ----------------------------------------------
+# in readme insert progressbar2 not progressbar
 # insert also psutils
+# ----------------------------------------------
+
+# ---------------------------------------------------
+# see if it is possible to optimize the _load_reads()
+# ---------------------------------------------------
 
 
 class TestingBinReadCounter:
@@ -47,6 +53,7 @@ class TestingBinReadCounter:
         self.flags = flag_list
         self.ref = reference
         self.out = out_pickle
+        self.cigar = None
 
     def get_folder(self):
         """return the folder name"""
@@ -104,6 +111,9 @@ class TestingBinReadCounter:
         """set the name of the pickle output file"""
         self.out = other_out
 
+    def set_cigar(self, cigar_input):
+        self.cigar = cigar_input
+
     def pickle_file_name(self, reference=False, read_info=False):
         # pickle name is a combination of the various parameters:
         # BRAN +
@@ -130,6 +140,98 @@ class TestingBinReadCounter:
 
     # def load_data(self):
     #     """A simple method to retrieve the data structures"""
+    def cigar_read_counts(self, cigar=False):
+        # the progress bar is used in this method, as in those after this, just
+        # to check if the process is going on well or not
+        list_chrom = []
+        index_column = []
+        chrom_column = {}
+        bin_column = {}
+        read_counts = {}
+        read_counts_concat = {}
+        count_none = 0
+
+        dir_list = os.listdir(self.folder)
+        for el in dir_list:
+            if el.endswith(".bam"):
+                # here pysam is used in order to be able to work on .bam files,
+                # that have a lower weight with respect to .sam files; thus the
+                # process is faster
+                samfile = pysam.AlignmentFile(self.folder + el, "rb")
+                bar_reads = progressbar.ProgressBar(max_value=progressbar.UnknownLength)
+                up = 0
+                header = samfile.header["SQ"]
+                clone = el[:el.find(".")]  # name of sample = columns
+                read_counts[clone] = []
+                read_counts_concat[clone] = []
+                chrom_column[clone] = []
+                bin_column[clone] = []
+
+                for line in header:
+                    chr_name = line["SN"]
+                    chr_length = line["LN"]
+                    # a list of univocal chromosome names is created
+                    if chr_name not in list_chrom:
+                        list_chrom.append(chr_name)
+
+                    bins = chr_length // self.bin_size + 1  # number of bin in each chromosome
+                    read_counts[clone].append([0] * bins)
+
+                    for i in range(bins):
+                        chrom_column[clone].append(chr_name)
+                        bin_column[clone].append(str(i))
+
+                # the list of univocal chromosome is used here in order to place the counts
+                # in the right chromosome
+                for chrom in list_chrom:
+                    # for each chromosome in the file, at position = bin_location in the list
+                    # of the chromosome, the element increments of one
+                    for read in samfile.fetch(chrom):
+                        # progress bar updating
+                        up += 1
+                        bar_reads.update(up)
+                        if read.cigarstring is not None and cigar is True:
+                            cigar_string = read.cigarstring
+                            if "S" not in cigar_string and "H" not in cigar_string:
+                                if str(read.flag) in self.flags:
+                                    bit_flag = bin(int(read.flag))  # binary format more easy to check
+                                    if bit_flag[-4] == "1":
+                                        read_pos = int(read.reference_start) + len(read.query_sequence) - 1
+                                    else:
+                                        read_pos = int(read.reference_start)
+                                    # Place the read in the right bin
+                                    #
+                                    # Dividing the read position for the length of the bin, the exact bin in
+                                    # which the read maps is obtained
+                                    #
+                                    # The corresponding element of the list is set to 1 if no other reads
+                                    # mapped in that bin before and incremented by 1 otherwise
+                                    bin_location = read_pos // self.bin_size
+                                    read_counts[clone][list_chrom.index(chrom)][int(bin_location)] += 1
+
+                                else:
+                                    continue
+                # in order to create a DataFrame, the lists of counts in read_counts
+                # have to be merged in a single list
+                for counts in read_counts[clone]:
+                    read_counts_concat[clone] += counts
+
+                samfile.close()
+
+        for j in range(len(bin_column[list(bin_column.keys())[0]])):
+            index_column.append(j)
+        # preparing for final DataFrame concatenation
+        index_column_df = pd.DataFrame({"index": index_column})
+        chrom_column_df = pd.DataFrame({"chr": chrom_column[list(chrom_column.keys())[0]]})
+        bin_column_df = pd.DataFrame({"bin": bin_column[list(bin_column.keys())[0]]})
+        read_counts_concat_df = pd.DataFrame(read_counts_concat)
+
+        read_count_df = pd.concat([index_column_df, chrom_column_df, bin_column_df, read_counts_concat_df],
+                                  axis=1)
+        # self._used_bam_files = file_list
+        # return self._used_bam_files, self._read_counts
+        # sum_col = sum(read_count_df["Ch15_3_1_ref_IlluminaPE_aligns_Primary_chr1"])
+        return read_count_df
 
     def _load_reads(self):
         """Gives a data structure that stores information about the
@@ -143,14 +245,13 @@ class TestingBinReadCounter:
         """
         # the progress bar is used in this method, as in those after this, just
         # to check if the process is going on well or not
-        bar_reads = progressbar.ProgressBar(max_value=progressbar.UnknownLength)
-        up = 0
         list_chrom = []
         index_column = []
         chrom_column = {}
         bin_column = {}
         read_counts = {}
         read_counts_concat = {}
+        count_none = 0
 
         dir_list = os.listdir(self.folder)
         for el in dir_list:
@@ -159,6 +260,8 @@ class TestingBinReadCounter:
                 # that have a lower weight with respect to .sam files; thus the
                 # process is faster
                 samfile = pysam.AlignmentFile(self.folder + el, "rb")
+                bar_reads = progressbar.ProgressBar(max_value=progressbar.UnknownLength)
+                up = 0
                 header = samfile.header["SQ"]
                 clone = el[:el.find(".")]  # name of sample = columns
                 read_counts[clone] = []
@@ -226,6 +329,7 @@ class TestingBinReadCounter:
         read_count_df = pd.concat([index_column_df, chrom_column_df, bin_column_df, read_counts_concat_df], axis=1)
         # self._used_bam_files = file_list
         # return self._used_bam_files, self._read_counts
+        # sum_col = sum(read_count_df["Ch15_3_1_ref_IlluminaPE_aligns_Primary_chr1"])
         return read_count_df
 
     def _load_Ns(self):
@@ -397,6 +501,10 @@ if __name__ == "__main__":
                         help="""If specified, a data-frame with information on the read ID, and if the read 
                         and its mate map in the same bin in the same chromosome, is created""")
 
+    parser.add_argument("-c", "--cigar",
+                        action="store_true",
+                        help="""""")
+
     args = parser.parse_args()
     dict_args = vars(parser.parse_args([]))
 
@@ -406,19 +514,23 @@ if __name__ == "__main__":
     else:
         flags = args.flag_list
 
-    counter = BinReadCounter(args.folder, args.bin_size, flags, args.reference, args.output_pickle)
+    counter = TestingBinReadCounter(args.folder, args.bin_size, flags, args.reference, args.output_pickle)
 
-    if args.reference and args.read_info:
-        counter._export_pickle(reference=True, read_info=True)
-
-    elif args.reference:
-        counter._export_pickle(reference=True)
-
-    elif args.read_info:
-        counter._export_pickle(read_info=True)
-
+    if args.cigar:
+        print(counter.cigar_read_counts(args.cigar))
     else:
-        counter._export_pickle()
+        print(counter._load_reads())
+    # if args.reference and args.read_info:
+    #     counter._export_pickle(reference=True, read_info=True)
+    #
+    # elif args.reference:
+    #     counter._export_pickle(reference=True)
+    #
+    # elif args.read_info:
+    #     counter._export_pickle(read_info=True)
+    #
+    # else:
+    #     counter._export_pickle()
 
     # ----------------------------------------
     # see if it is possible to optimize the _load_reads()

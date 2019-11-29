@@ -22,8 +22,16 @@ import pickle
 import pandas as pd
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 import pysam
-import progressbar  # in readme insert progressbar2 not progressbar
+import progressbar
+
+# ----------------------------------------------
+# in readme insert progressbar2 not progressbar
 # insert also psutils
+# ----------------------------------------------
+
+# ---------------------------------------------------
+# see if it is possible to optimize the _load_reads()
+# ---------------------------------------------------
 
 
 class BinReadCounter:
@@ -125,10 +133,6 @@ class BinReadCounter:
 
         return out_name
 
-    # def load_data(self):
-    #     """A simple method to retrieve the data structures"""
-
-
     def _load_reads(self):
         """Gives a data structure that stores information about the
         clone, the chromosome of each clone and the count of mapping
@@ -222,8 +226,6 @@ class BinReadCounter:
         read_counts_concat_df = pd.DataFrame(read_counts_concat)
 
         read_count_df = pd.concat([index_column_df, chrom_column_df, bin_column_df, read_counts_concat_df], axis=1)
-        # self._used_bam_files = file_list
-        # return self._used_bam_files, self._read_counts
         return read_count_df
 
     def _load_Ns(self):
@@ -418,6 +420,4 @@ if __name__ == "__main__":
     else:
         counter._export_pickle()
 
-    # ----------------------------------------
-    # see if it is possible to optimize the _load_reads()
-    # -----------------------------------------
+
