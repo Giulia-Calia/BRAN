@@ -24,6 +24,7 @@ from Bio.SeqIO.FastaIO import SimpleFastaParser
 import pysam
 import progressbar
 
+
 # ----------------------------------------------
 # in readme insert progressbar2 not progressbar
 # insert also psutils
@@ -54,6 +55,8 @@ class TestingBinReadCounter:
         self.ref = reference
         self.out = out_pickle
         self.cigar = None
+        # self.read_counts = None
+        # self.read_counts_cigar = None
 
     def get_folder(self):
         """return the folder name"""
@@ -114,6 +117,12 @@ class TestingBinReadCounter:
     def set_cigar(self, cigar_input):
         self.cigar = cigar_input
 
+    # def set_cigar_reads(self, cigar_reads):
+    #     self.read_counts_cigar = cigar_reads
+    #
+    # def set_read_counts(self, read_counts):
+    #     self.read_counts = read_counts
+
     def pickle_file_name(self, reference=False, read_info=False):
         # pickle name is a combination of the various parameters:
         # BRAN +
@@ -124,6 +133,7 @@ class TestingBinReadCounter:
         # id if the read_id_info is required with parameters
         out_name = "BRAN" + str(self.bin_size)
         if self.get_flags() == ["0", "16", "99", "147", "163", "83"]:
+            # if self.get_flags() == "3":
             out_name += "_df"
         else:
             out_name += "_mf"
@@ -228,9 +238,8 @@ class TestingBinReadCounter:
 
         read_count_df = pd.concat([index_column_df, chrom_column_df, bin_column_df, read_counts_concat_df],
                                   axis=1)
-        # self._used_bam_files = file_list
-        # return self._used_bam_files, self._read_counts
-        # sum_col = sum(read_count_df["Ch15_3_1_ref_IlluminaPE_aligns_Primary_chr1"])
+        # self.set_cigar_reads(read_count_df)
+        # return self.read_counts_cigar
         return read_count_df
 
     def _load_reads(self):
@@ -327,9 +336,8 @@ class TestingBinReadCounter:
         read_counts_concat_df = pd.DataFrame(read_counts_concat)
 
         read_count_df = pd.concat([index_column_df, chrom_column_df, bin_column_df, read_counts_concat_df], axis=1)
-        # self._used_bam_files = file_list
-        # return self._used_bam_files, self._read_counts
-        # sum_col = sum(read_count_df["Ch15_3_1_ref_IlluminaPE_aligns_Primary_chr1"])
+        # self.set_read_counts(read_count_df)
+        # return self.read_counts
         return read_count_df
 
     def _load_Ns(self):
@@ -461,6 +469,22 @@ class TestingBinReadCounter:
 
             pickle.dump(out_data, exp_file)
 
+    def stats(self):
+        """Return:
+                a DataFrame containing information on the total number of reads for each sample"""
+        # we want verify if the number of reads is correctly calculated
+        # number of total reads in the sample
+        # number of reads that has flag 99 that has to be equal to reads with flag 147
+        # number of reads that has flag 163 that has to be equal to reads with flag 83
+
+        # count_reads_flag = [0] * len(self.flags)  # per each flag in the list the amount of reads in the file is
+        # calculated
+        read_counts = self._load_reads()
+        for col in read_counts.columns:
+            if col != "index" and col != "chr" and col != "bin":
+                sum_col = sum(read_counts[col])
+                print(col, " : ", sum_col, "\n")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(usage="%(prog)s [options]",
@@ -480,6 +504,7 @@ if __name__ == "__main__":
     parser.add_argument("-fl", "--flag_list",
                         nargs="+",
                         default=["0", "16", "99", "147", "163", "83"],
+                        # default="3",
                         help="""A list of the bitwise-flags in SAM format that identify the reads to be counted 
                         during analyses; if different flags wants to be added, add them as single strings 
                         (e.g. "177" "129")""")
@@ -519,7 +544,9 @@ if __name__ == "__main__":
     if args.cigar:
         print(counter.cigar_read_counts(args.cigar))
     else:
-        print(counter._load_reads())
+       counter._load_reads()
+
+    print(counter.stats())
     # if args.reference and args.read_info:
     #     counter._export_pickle(reference=True, read_info=True)
     #

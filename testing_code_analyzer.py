@@ -24,15 +24,24 @@
 
 import os
 import argparse
+import pickle
 import plotly.graph_objects as go
 from testing_code_counter import TestingBinReadCounter
 import rpy2.robjects as robjects
 import rpy2.robjects.packages as rpackages
 from rpy2.robjects.packages import importr
+from rpy2.robjects import pandas2ri
 
+pandas2ri.activate()
 base = importr('base')
 utils = importr('utils')
 stats = importr('stats')
+edger = rpackages.importr('edgeR')
+
+
+# --------------------------
+# install tzlocal for pandas2ri
+# --------------------------
 
 
 class TestingBinReadAnalyzer:
@@ -136,17 +145,19 @@ class TestingBinReadAnalyzer:
             self.set_parameters(parameters)
             return self.parameters
 
-    def normalize_bins(self):
+    def normalize_bins(self, df_counts):
         """This method handles the normalization of the raw read_counts
         using an R package, edgeR, imported thanks to rpy2 that provides
         an already implemented function, cpm, for the normalization of a
         table of counts, as well as a series of other function specifically
         implemented for RNA-Seq"""
-        read_counts = self.parameters["read_counts"]
+        # read_counts = self.parameters["read_counts"]
+        read_counts = df_counts
+
         # the following line has to be deleted when the class will work on the entire .bam files
         # chr1 = read_counts[read_counts['chr'] == 'CH.chr1']
         # the edgeR package is imported using rpy2 syntax to access to all its built-in functions
-        edger = rpackages.importr('edgeR')
+
         read_counts_edger = {}  # a dictionary of sample: vector_of_counts to work with edger
         col_list = list(read_counts.columns)
         for i in range(len(col_list)):
@@ -154,12 +165,124 @@ class TestingBinReadAnalyzer:
                 read_counts_edger[col_list[i]] = robjects.IntVector(read_counts[col_list[i]])
         read_counts_edger_df = robjects.DataFrame(read_counts_edger)
         norm_counts = edger.cpm(read_counts_edger_df, normalized_lib_sizes=True)
+
         self.set_norm(norm_counts)
         return self.norm  # an edger object (table) of counts
 
-    def get_significant_diff(self):  # , chr=None, sample=None
-        edger = rpackages.importr("edgeR")
-        pass
+    def get_sig_difference(self, df_counts, bs, control_name=None):
+        """This method calculates the pairwise logFoldChange for the different clones
+        against the control plant counts, in order to see, if are present, significant
+        differences in terms of mapping reads"""
+        if control_name is not None:
+            # read_counts = self.parameters["read_counts"]
+            read_counts = df_counts
+            control = control_name
+            bin_size = bs
+            fig = go.Figure()
+            read_counts_edger = {}  # {}  # a dictionary of sample: vector_of_counts to work with edger
+            bcv = 0.1  # reasonable dispersion value; typical values for common BCV (square-root dispersion) of data-set
+            # arising from well-controlled experiments are 0.4 for human data, 0.1 for data of genetically identical
+            # model organisms or 0.01 fo technical replicates
+            col_list = list(read_counts.columns)
+            coordinates_x = []
+            coordinates_y = []
+            chromosomes = []
+
+            for i in range(len(col_list)):
+                if col_list[i] != "index" and col_list[i] != "chr" and col_list[i] != 'bin':
+                    read_counts_edger[col_list[i]] = robjects.r.matrix(robjects.IntVector(read_counts[col_list[i]]))
+
+            # with raw data
+            for el in read_counts_edger:
+                if el != control:
+                    # print(el)
+                    tmp_dict = {el: read_counts_edger[el], control: read_counts_edger[control]}
+                    # print(tmp_dict)
+                    tmp_df = robjects.DataFrame(tmp_dict)
+                    dge_list = edger.DGEList(robjects.DataFrame(tmp_df), group=robjects.IntVector([2, 1]))
+                    # print(dge_list)
+                    dge_list_ed = edger.estimateDisp(dge_list)
+                    # print(dge_list_ed)
+                    exact_test = edger.exactTest(dge_list_ed, dispersion=bcv ** 2)
+                    # print(exact_test)
+                    # print(edger.topTags(exact_test))
+                    exact_test_df = robjects.DataFrame(exact_test[0])
+                    # print(type(exact_test_df))
+                    exact_test_pd_df = pandas2ri.ri2py_dataframe(exact_test_df)
+                    # print(exact_test_pd_df)
+
+                    exact_test_pd_df["index"] = read_counts["index"]
+                    threshold = exact_test_pd_df[exact_test_pd_df["logFC"] > 1.5]
+                    # print(threshold)
+
+                    fig.update_xaxes(title_text="Chromosomes_Bins")
+                    fig.update_yaxes(title_text="Read_Count_Per_Bin")
+                    fig.add_trace(go.Scatter(x=threshold["index"],
+                                             y=threshold["logFC"],
+                                             mode="markers",
+                                             name=el))
+            for ch in read_counts["chr"]:
+                if ch[ch.find("c"):] not in chromosomes:
+                    chromosomes.append(ch[ch.find("c"):])
+
+            for chrom in chromosomes:
+                single_df = read_counts[read_counts["chr"] == "CH." + chrom]
+                coordinates_x.append(single_df["index"].mean())
+                coordinates_y.append(-1)
+                if int(chrom[chrom.find("r") + 1:]) % 2 == 0:
+                    fig.add_shape(go.layout.Shape(type="rect",
+                                                  xref="x",
+                                                  yref="paper",
+                                                  x0=single_df["index"].iloc[0],
+                                                  y0=0,
+                                                  x1=single_df["index"].iloc[-1],
+                                                  y1=1,
+                                                  fillcolor="rgb(230, 230, 250)",
+                                                  opacity=0.5,
+                                                  layer="below",
+                                                  line_width=0))
+                else:
+                    fig.add_shape(go.layout.Shape(type="rect",
+                                                  xref="x",
+                                                  yref="paper",
+                                                  x0=single_df["index"].iloc[0],
+                                                  y0=0,
+                                                  x1=single_df["index"].iloc[-1],
+                                                  y1=1,
+                                                  fillcolor="rgb(240, 248, 255)",
+                                                  opacity=0.5,
+                                                  layer="below",
+                                                  line_width=0))
+
+            fig.add_trace(go.Scatter(x=coordinates_x,
+                                     y=coordinates_y,
+                                     text=chromosomes,
+                                     mode="text",
+                                     showlegend=False,
+                                     ))
+
+            # fig.update_layout(title="Read Counts - All Clones - All Chromosomes - Bin Size: " + str(self.bin_size))
+            fig.update_layout(title="Read Counts - All Clones - All Chromosomes - Bin Size: " + str(bin_size))
+
+            fig.show()
+
+        else:
+            print("No control group is specified, please try again, specifying the column name of control file as "
+                  "parameter '-c'")
+
+        # with normalized data
+        # for i in range(1, self.norm.ncol + 1):
+        #     col = self.norm.rx(True, i)
+        #     col_name = self.norm.colnames[i-1]
+        #     if col_name != control:
+        #         print(col_name)
+        #         tmp_dict = {col_name: col, control: self.norm.rx(True, control)}
+        #         tmp_df = robjects.DataFrame(tmp_dict)
+        #         dge_list = edger.DGEList(robjects.DataFrame(tmp_df), group=robjects.IntVector([2, 1]))
+        #         # print(dge_list)
+        #         dge_list_ed = edger.estimateDisp(dge_list)
+        #         exact_test = edger.exactTest(dge_list_ed, dispersion=bcv**2)
+        #         print(edger.topTags(exact_test))
 
     def add_ns_trace(self, fig, reference=None, chrom=None):
         """This method is used in other plotting methods, in order to add the
@@ -303,7 +426,7 @@ class TestingBinReadAnalyzer:
 
         fig.show()
 
-    def plot_all(self, reference, ns=False, fig=go.Figure()):
+    def plot_all(self, df_counts, reference, ns=False, fig=go.Figure()):
         """This method allows to obtain a scatter-plot of raw_read_counts
         of all chromosomes and all samples
 
@@ -316,8 +439,12 @@ class TestingBinReadAnalyzer:
         Returns:
             A scatter-plot of counts
         """
-        read_counts = self.parameters["read_counts"]
+        # read_counts = self.parameters["read_counts"]
+        read_counts = df_counts
+        coordinates_x = []
+        coordinates_y = []
 
+        chromosomes = []
         fig.update_xaxes(title_text="Chromosomes_Bins")
         fig.update_yaxes(title_text="Read_Count_Per_Bin")
 
@@ -328,6 +455,46 @@ class TestingBinReadAnalyzer:
                                          y=read_counts[col_list[i]],
                                          mode="markers",
                                          name=str(col_list[i])))
+
+        for ch in read_counts["chr"]:
+            if ch[ch.find("c"):] not in chromosomes:
+                chromosomes.append(ch[ch.find("c"):])
+
+        for chrom in chromosomes:
+            single_df = read_counts[read_counts["chr"] == "CH." + chrom]
+            coordinates_x.append(single_df["index"].mean())
+            coordinates_y.append(-2)
+            if int(chrom[chrom.find("r") + 1:]) % 2 == 0:
+                fig.add_shape(go.layout.Shape(type="rect",
+                                              xref="x",
+                                              yref="paper",
+                                              x0=single_df["index"].iloc[0],
+                                              y0=0,
+                                              x1=single_df["index"].iloc[-1],
+                                              y1=1,
+                                              fillcolor="rgb(230, 230, 250)",  # lavande
+                                              opacity=0.5,
+                                              layer="below",
+                                              line_width=0))
+            else:
+                fig.add_shape(go.layout.Shape(type="rect",
+                                              xref="x",
+                                              yref="paper",
+                                              x0=single_df["index"].iloc[0],
+                                              y0=0,
+                                              x1=single_df["index"].iloc[-1],
+                                              y1=1,
+                                              fillcolor="rgb(240, 248, 255)",  # ~light_green
+                                              opacity=0.5,
+                                              layer="below",
+                                              line_width=0))
+
+        fig.add_trace(go.Scatter(x=coordinates_x,
+                                 y=coordinates_y,
+                                 text=chromosomes,
+                                 mode="text",
+                                 showlegend=False,
+                                 ))
 
         if ns:
             self.add_ns_trace(fig, reference=reference)
@@ -453,7 +620,7 @@ class TestingBinReadAnalyzer:
 
         fig.show()
 
-    def plot_norm_data_all(self, reference, ns=False, fig=go.Figure()):
+    def plot_norm_data_all(self, df_counts, reference, ns=False, fig=go.Figure()):
         """This method allows to obtain a scatter-plot of normalized_read_counts
         in all chromosomes and for all samples
 
@@ -466,7 +633,11 @@ class TestingBinReadAnalyzer:
         Returns:
             A scatter-plot of normalized counts
         """
-        read_counts = self.parameters["read_counts"]
+        # read_counts = self.parameters["read_counts"]
+        read_counts = df_counts
+        coordinates_x = []
+        coordinates_y = []
+        chromosomes = []
         norm_counts = self.norm
         fig.update_xaxes(title_text="Chromosomes_Bins")
         fig.update_yaxes(title_text="Norm_Read_Count_Per_Bin")
@@ -475,6 +646,45 @@ class TestingBinReadAnalyzer:
                                      y=list(norm_counts.rx(True, i + 1)),
                                      mode="markers",
                                      name=norm_counts.colnames[i]))
+        for ch in read_counts["chr"]:
+            if ch[ch.find("c"):] not in chromosomes:
+                chromosomes.append(ch[ch.find("c"):])
+
+        for chrom in chromosomes:
+            single_df = read_counts[read_counts["chr"] == "CH." + chrom]
+            coordinates_x.append(single_df["index"].mean())
+            coordinates_y.append(-2)
+            if int(chrom[chrom.find("r") + 1:]) % 2 == 0:
+                fig.add_shape(go.layout.Shape(type="rect",
+                                              xref="x",
+                                              yref="paper",
+                                              x0=single_df["index"].iloc[0],
+                                              y0=0,
+                                              x1=single_df["index"].iloc[-1],
+                                              y1=1,
+                                              fillcolor="rgb(230, 230, 250)",
+                                              opacity=0.5,
+                                              layer="below",
+                                              line_width=0))
+            else:
+                fig.add_shape(go.layout.Shape(type="rect",
+                                              xref="x",
+                                              yref="paper",
+                                              x0=single_df["index"].iloc[0],
+                                              y0=0,
+                                              x1=single_df["index"].iloc[-1],
+                                              y1=1,
+                                              fillcolor="rgb(240, 248, 255)",
+                                              opacity=0.5,
+                                              layer="below",
+                                              line_width=0))
+
+        fig.add_trace(go.Scatter(x=coordinates_x,
+                                 y=coordinates_y,
+                                 text=chromosomes,
+                                 mode="text",
+                                 showlegend=False,
+                                 ))
 
         if ns:
             self.add_ns_trace(fig, reference=reference)
@@ -482,7 +692,6 @@ class TestingBinReadAnalyzer:
         fig.update_layout(title="Normalized Read Counts - Clone: all - Chr: all - Bin Size: " + str(self.bin_size))
 
         fig.show()
-
 
     def plot_sig_data(self):
         pass
@@ -543,6 +752,13 @@ if __name__ == "__main__":
                         action="store_true",
                         help="""Specify if the Ns counts has to be included in the plot of the read counts""")
 
+    parser.add_argument("-c", "--control_name",
+                        type=str,
+                        default=None,
+                        help="""The name of the control group for the fold_change analysis, it should be the same 
+                        name as the column name in the read_counts data structure, thus the name of the alignment 
+                        file used as baseline without the ".bam" string""")
+
     args = parser.parse_args()
     dict_args = vars(parser.parse_args([]))
 
@@ -554,8 +770,13 @@ if __name__ == "__main__":
     analyzer = TestingBinReadAnalyzer(args.folder, args.bin_size, args.reference, flags, args.output_pickle)
 
     analyzer.load_data(reference=args.reference, read_info=args.read_info, verbose=True)
-    analyzer.normalize_bins()
-    analyzer.get_significant_diff()
+    with open("../all_samples_pickles/BRAN250000_df.p", "rb") as input_param:
+        param = pickle.load(input_param)
+        analyzer.normalize_bins(param["read_counts"])
+        analyzer.get_sig_difference(param["read_counts"], param["bin_size"], args.control_name)
+        analyzer.plot_all(param["read_counts"], args.reference)
+        analyzer.plot_norm_data_all(param["read_counts"], args.reference)
+
     # if not os.path.exists("plots"):
     #     os.mkdir("plots")
 
