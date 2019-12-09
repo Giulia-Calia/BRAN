@@ -26,6 +26,10 @@ import os
 import argparse
 import pickle
 import plotly.graph_objects as go
+import plotly.express as px  # plot norm_counts only one sample
+import plotly.figure_factory as ff  # plot norm_counts multiple sample
+import pandas as pd
+import numpy as np
 from testing_code_counter import TestingBinReadCounter
 import rpy2.robjects as robjects
 import rpy2.robjects.packages as rpackages
@@ -75,12 +79,16 @@ class TestingBinReadAnalyzer:
         self.out = out_pickle
         self.parameters = None
         self.norm = None
+        self.fold_change = None
 
     def set_parameters(self, param):
         self.parameters = param
 
     def set_norm(self, norm):
         self.norm = norm
+
+    def set_fold_change(self, diff):
+        self.fold_change = diff
 
     def load_data(self, reference=None, read_info=None, verbose=False):
         """If the pickle file is already present in the folder and the parameters
@@ -154,6 +162,17 @@ class TestingBinReadAnalyzer:
         # read_counts = self.parameters["read_counts"]
         read_counts = df_counts
 
+        # fig = px.histogram(read_counts, x="FEM_ref_IlluminaPE_aligns_Primary")
+        # fig.show()
+        # counts_to_plot = []
+        # col_labels = []
+        # for col in read_counts.columns:
+        #     if col != "index" and col != "chr" and col != 'bin':
+        #         counts_to_plot.append(read_counts[col])
+        #         col_labels.append(col)
+        # fig = ff.create_distplot(counts_to_plot, group_labels=col_labels)
+        # fig.show()
+
         # the following line has to be deleted when the class will work on the entire .bam files
         # chr1 = read_counts[read_counts['chr'] == 'CH.chr1']
         # the edgeR package is imported using rpy2 syntax to access to all its built-in functions
@@ -162,14 +181,51 @@ class TestingBinReadAnalyzer:
         col_list = list(read_counts.columns)
         for i in range(len(col_list)):
             if col_list[i] != "index" and col_list[i] != "chr" and col_list[i] != 'bin':
+                # creates an element of the dictionary [sample_name]: r_vector_of_counts
                 read_counts_edger[col_list[i]] = robjects.IntVector(read_counts[col_list[i]])
-        read_counts_edger_df = robjects.DataFrame(read_counts_edger)
-        norm_counts = edger.cpm(read_counts_edger_df, normalized_lib_sizes=True)
 
+        read_counts_edger_df = robjects.DataFrame(read_counts_edger)  # R data frame
+
+        # create a DGEList
+        dge_list = edger.DGEList(counts=read_counts_edger_df, group=robjects.IntVector([2, 2, 2, 1]))
+        print(dge_list)
+
+        # calc norm factors
+        norm_fact = edger.calcNormFactors(dge_list)
+        print(norm_fact)
+
+        # normalization function
+        # norm_counts = edger.cpm(read_counts_edger_df, log=True)
+        norm_counts = edger.cpm(norm_fact, normalized_lib_sizes=True)
+        # print(norm_counts)
+        norm_counts_dict = {}
+        for i in range(1, norm_counts.ncol + 1):
+            norm_counts_dict[norm_counts.colnames[i-1]] = list(norm_counts.rx(True, i))
+        norm_counts_df = pd.DataFrame(norm_counts_dict)
+        print(norm_counts_df)
+
+        # plot only one sample
+
+        # norm_counts_df["index"] = read_counts["index"]
+        # # norm_counts_df["Ch15_3_1_ref_IlluminaPE_aligns_Primary"] = np.log(norm_counts_df["Ch15_3_1_ref_IlluminaPE_aligns_Primary"])
+        # fig = px.histogram(norm_counts_df, x="Ch15_3_1_ref_IlluminaPE_aligns_Primary")
+        # fig.show()
+
+        # plot all samples
+
+        norm_counts_to_plot = []
+        for col in norm_counts_df.columns:
+            norm_counts_to_plot.append(norm_counts_df[col])
+        fig_norm = ff.create_distplot(norm_counts_to_plot, group_labels=norm_counts_df.columns)
+        # fig_norm = ff.create_distplot(norm_counts_to_plot, group_labels=norm_counts_df.columns, bin_size=0.05)
+        # fig_norm.show()
+
+        # print(norm_counts_df)
+        # print(list(norm_counts.rx(True, 1)))
         self.set_norm(norm_counts)
         return self.norm  # an edger object (table) of counts
 
-    def get_sig_difference(self, df_counts, bs, control_name=None):
+    def get_fold_change(self, df_counts, control_name=None):
         """This method calculates the pairwise logFoldChange for the different clones
         against the control plant counts, in order to see, if are present, significant
         differences in terms of mapping reads"""
@@ -177,112 +233,78 @@ class TestingBinReadAnalyzer:
             # read_counts = self.parameters["read_counts"]
             read_counts = df_counts
             control = control_name
-            bin_size = bs
-            fig = go.Figure()
             read_counts_edger = {}  # {}  # a dictionary of sample: vector_of_counts to work with edger
             bcv = 0.1  # reasonable dispersion value; typical values for common BCV (square-root dispersion) of data-set
             # arising from well-controlled experiments are 0.4 for human data, 0.1 for data of genetically identical
             # model organisms or 0.01 fo technical replicates
             col_list = list(read_counts.columns)
-            coordinates_x = []
-            coordinates_y = []
-            chromosomes = []
-
+            fold_change = {}
             for i in range(len(col_list)):
                 if col_list[i] != "index" and col_list[i] != "chr" and col_list[i] != 'bin':
                     read_counts_edger[col_list[i]] = robjects.r.matrix(robjects.IntVector(read_counts[col_list[i]]))
 
             # with raw data
-            for el in read_counts_edger:
-                if el != control:
-                    # print(el)
-                    tmp_dict = {el: read_counts_edger[el], control: read_counts_edger[control]}
-                    # print(tmp_dict)
+            # for el in read_counts_edger:
+            #     if el != control:
+            #         # print(el)
+            #         tmp_dict = {el: read_counts_edger[el], control: read_counts_edger[control]}
+            #         # print(tmp_dict)
+            #         tmp_df = robjects.DataFrame(tmp_dict)
+            #         dge_list = edger.DGEList(robjects.DataFrame(tmp_df), group=robjects.IntVector([2, 1]))
+            #         # print(dge_list)
+            #         dge_list_ed = edger.estimateDisp(dge_list)
+            #         # print(dge_list_ed)
+            #         exact_test = edger.exactTest(dge_list_ed, dispersion=bcv ** 2)
+            #         # print(exact_test)
+            #         # print(edger.topTags(exact_test))
+            #         exact_test_df = robjects.DataFrame(exact_test[0])
+            #         # print(type(exact_test_df))
+            #         exact_test_pd_df = pandas2ri.ri2py_dataframe(exact_test_df)
+            #         # print(exact_test_pd_df)
+            #         fold_change[el] = exact_test_pd_df
+
+            # with normalized data
+            for i in range(1, self.norm.ncol + 1):
+                col = self.norm.rx(True, i)
+                col_name = self.norm.colnames[i-1]
+                if col_name != control:
+                    print(col_name)
+                    tmp_dict = {col_name: col, control: self.norm.rx(True, control)}
                     tmp_df = robjects.DataFrame(tmp_dict)
                     dge_list = edger.DGEList(robjects.DataFrame(tmp_df), group=robjects.IntVector([2, 1]))
                     # print(dge_list)
                     dge_list_ed = edger.estimateDisp(dge_list)
-                    # print(dge_list_ed)
-                    exact_test = edger.exactTest(dge_list_ed, dispersion=bcv ** 2)
-                    # print(exact_test)
-                    # print(edger.topTags(exact_test))
+                    exact_test = edger.exactTest(dge_list_ed, dispersion=bcv**2)
                     exact_test_df = robjects.DataFrame(exact_test[0])
                     # print(type(exact_test_df))
                     exact_test_pd_df = pandas2ri.ri2py_dataframe(exact_test_df)
                     # print(exact_test_pd_df)
+                    fold_change[col_name] = exact_test_pd_df
 
-                    exact_test_pd_df["index"] = read_counts["index"]
-                    threshold = exact_test_pd_df[exact_test_pd_df["logFC"] > 1.5]
-                    # print(threshold)
-
-                    fig.update_xaxes(title_text="Chromosomes_Bins")
-                    fig.update_yaxes(title_text="Read_Count_Per_Bin")
-                    fig.add_trace(go.Scatter(x=threshold["index"],
-                                             y=threshold["logFC"],
-                                             mode="markers",
-                                             name=el))
-            for ch in read_counts["chr"]:
-                if ch[ch.find("c"):] not in chromosomes:
-                    chromosomes.append(ch[ch.find("c"):])
-
-            for chrom in chromosomes:
-                single_df = read_counts[read_counts["chr"] == "CH." + chrom]
-                coordinates_x.append(single_df["index"].mean())
-                coordinates_y.append(-1)
-                if int(chrom[chrom.find("r") + 1:]) % 2 == 0:
-                    fig.add_shape(go.layout.Shape(type="rect",
-                                                  xref="x",
-                                                  yref="paper",
-                                                  x0=single_df["index"].iloc[0],
-                                                  y0=0,
-                                                  x1=single_df["index"].iloc[-1],
-                                                  y1=1,
-                                                  fillcolor="rgb(230, 230, 250)",
-                                                  opacity=0.5,
-                                                  layer="below",
-                                                  line_width=0))
-                else:
-                    fig.add_shape(go.layout.Shape(type="rect",
-                                                  xref="x",
-                                                  yref="paper",
-                                                  x0=single_df["index"].iloc[0],
-                                                  y0=0,
-                                                  x1=single_df["index"].iloc[-1],
-                                                  y1=1,
-                                                  fillcolor="rgb(240, 248, 255)",
-                                                  opacity=0.5,
-                                                  layer="below",
-                                                  line_width=0))
-
-            fig.add_trace(go.Scatter(x=coordinates_x,
-                                     y=coordinates_y,
-                                     text=chromosomes,
-                                     mode="text",
-                                     showlegend=False,
-                                     ))
-
-            # fig.update_layout(title="Read Counts - All Clones - All Chromosomes - Bin Size: " + str(self.bin_size))
-            fig.update_layout(title="Read Counts - All Clones - All Chromosomes - Bin Size: " + str(bin_size))
-
-            fig.show()
+                    # print(edger.topTags(exact_test))
+            print(fold_change)
+            self.set_fold_change(fold_change)
+            return self.fold_change
 
         else:
             print("No control group is specified, please try again, specifying the column name of control file as "
                   "parameter '-c'")
 
-        # with normalized data
-        # for i in range(1, self.norm.ncol + 1):
-        #     col = self.norm.rx(True, i)
-        #     col_name = self.norm.colnames[i-1]
-        #     if col_name != control:
-        #         print(col_name)
-        #         tmp_dict = {col_name: col, control: self.norm.rx(True, control)}
-        #         tmp_df = robjects.DataFrame(tmp_dict)
-        #         dge_list = edger.DGEList(robjects.DataFrame(tmp_df), group=robjects.IntVector([2, 1]))
-        #         # print(dge_list)
-        #         dge_list_ed = edger.estimateDisp(dge_list)
-        #         exact_test = edger.exactTest(dge_list_ed, dispersion=bcv**2)
-        #         print(edger.topTags(exact_test))
+
+
+    def get_sig_pos(self, df_counts):
+        """This method return the chromosome position in terms of basis, of bins
+        retained significantly different from the control"""
+        fold_change = self.fold_change
+        read_counts = df_counts
+        sig_fold = {}
+        # here I have to retrieve the information about:
+        # - significantly different bins
+        # - each bin to which chromosome is associated
+        # - position of the bin in the chromosome
+        # - plot of the portion of chromosome corresponding to the bin
+        #   - if the significant bin is more than one check if they belong to the same chromosome
+        #     and plot the entire chromosome
 
     def add_ns_trace(self, fig, reference=None, chrom=None):
         """This method is used in other plotting methods, in order to add the
@@ -693,8 +715,78 @@ class TestingBinReadAnalyzer:
 
         fig.show()
 
-    def plot_sig_data(self):
-        pass
+    def plot_sig_data(self, df_counts, bs, fig=go.Figure()):
+        read_counts = df_counts
+        fold_change = self.fold_change
+        coordinates_x = []
+        coordinates_y = []
+        chromosomes = []
+        bin_size = bs
+        for el in fold_change:
+            fold_change[el]["index"] = read_counts["index"]
+            # threshold = fold_change[el][fold_change[el]["logFC"] > 1.5]
+            # print(threshold)
+            fig.update_xaxes(title_text="Chromosomes_Bins")
+            fig.update_yaxes(title_text="Read_Count_Per_Bin")
+            fig.add_trace(go.Scatter(x=fold_change[el]["index"],
+                                     y=fold_change[el]["logFC"],
+                                     mode="markers",
+                                     name=el))
+
+            # for every bin with significant difference form the control, plot a dashed-dot line
+            # fig.add_shape(go.layout.Shape(type="line",
+            #                               x0=threshold["index"],
+            #                               y0=threshold["logFC"],
+            #                               x1=threshold["index"],
+            #                               y1=threshold["logFC"] + 10,
+            #                               line=dict(color="black",
+            #                                         width=3,
+            #                                         dash="dashdot")))
+
+        for ch in read_counts["chr"]:
+            if ch[ch.find("c"):] not in chromosomes:
+                chromosomes.append(ch[ch.find("c"):])
+
+        for chrom in chromosomes:
+            single_df = read_counts[read_counts["chr"] == "CH." + chrom]
+            coordinates_x.append(single_df["index"].mean())
+            coordinates_y.append(-1)
+            if int(chrom[chrom.find("r") + 1:]) % 2 == 0:
+                fig.add_shape(go.layout.Shape(type="rect",
+                                              xref="x",
+                                              yref="paper",
+                                              x0=single_df["index"].iloc[0],
+                                              y0=0,
+                                              x1=single_df["index"].iloc[-1],
+                                              y1=1,
+                                              fillcolor="rgb(230, 230, 250)",
+                                              opacity=0.5,
+                                              layer="below",
+                                              line_width=0))
+            else:
+                fig.add_shape(go.layout.Shape(type="rect",
+                                              xref="x",
+                                              yref="paper",
+                                              x0=single_df["index"].iloc[0],
+                                              y0=0,
+                                              x1=single_df["index"].iloc[-1],
+                                              y1=1,
+                                              fillcolor="rgb(240, 248, 255)",
+                                              opacity=0.5,
+                                              layer="below",
+                                              line_width=0))
+
+        fig.add_trace(go.Scatter(x=coordinates_x,
+                                 y=coordinates_y,
+                                 text=chromosomes,
+                                 mode="text",
+                                 showlegend=False,
+                                 ))
+
+        # fig.update_layout(title="Read Counts - All Clones - All Chromosomes - Bin Size: " + str(self.bin_size))
+        fig.update_layout(title="Read Counts - All Clones - All Chromosomes - Bin Size: " + str(bin_size))
+
+        fig.show()
 
 
 if __name__ == "__main__":
@@ -770,12 +862,14 @@ if __name__ == "__main__":
     analyzer = TestingBinReadAnalyzer(args.folder, args.bin_size, args.reference, flags, args.output_pickle)
 
     analyzer.load_data(reference=args.reference, read_info=args.read_info, verbose=True)
-    with open("../all_samples_pickles/BRAN250000_df.p", "rb") as input_param:
+    with open("../all_samples_pickles/BRAN30000_df.p", "rb") as input_param:
         param = pickle.load(input_param)
         analyzer.normalize_bins(param["read_counts"])
-        analyzer.get_sig_difference(param["read_counts"], param["bin_size"], args.control_name)
-        analyzer.plot_all(param["read_counts"], args.reference)
-        analyzer.plot_norm_data_all(param["read_counts"], args.reference)
+        analyzer.get_fold_change(param["read_counts"], args.control_name)
+        # analyzer.plot_all(param["read_counts"], args.reference)
+        # analyzer.plot_norm_data_all(param["read_counts"], args.reference)
+        analyzer.plot_sig_data(param["read_counts"], param["bin_size"])
+        # analyzer.get_sig_pos(param["read_counts"])
 
     # if not os.path.exists("plots"):
     #     os.mkdir("plots")
