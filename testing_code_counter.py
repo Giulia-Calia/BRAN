@@ -123,7 +123,7 @@ class TestingBinReadCounter:
     # def set_read_counts(self, read_counts):
     #     self.read_counts = read_counts
 
-    def pickle_file_name(self, reference=False, read_info=False):
+    def pickle_file_name(self, other_cigar_filters, cigar_filter=False, reference=False, read_info=False):
         # pickle name is a combination of the various parameters:
         # BRAN +
         # bin_size +
@@ -138,6 +138,11 @@ class TestingBinReadCounter:
         else:
             out_name += "_mf"
 
+        if cigar_filter and other_cigar_filters:
+            out_name += "_cf"
+        elif cigar_filter:
+            out_name += "_c"
+
         if reference:
             out_name += "_" + self.get_ref_name()[:2]
 
@@ -150,97 +155,123 @@ class TestingBinReadCounter:
 
     # def load_data(self):
     #     """A simple method to retrieve the data structures"""
-    def cigar_read_counts(self, cigar=False):
+    def _load_cigar_read_counts(self, other_cigar_filters, cigar_filter=False):
         # the progress bar is used in this method, as in those after this, just
         # to check if the process is going on well or not
-        list_chrom = []
-        index_column = []
-        chrom_column = {}
-        bin_column = {}
-        read_counts = {}
-        read_counts_concat = {}
-        count_none = 0
+        if cigar_filter is True:
+            cigar_clip = ["S", "H"]
+            list_chrom = []
+            index_column = []
+            chrom_column = {}
+            bin_column = {}
+            read_counts = {}
+            read_counts_concat = {}
 
-        dir_list = os.listdir(self.folder)
-        for el in dir_list:
-            if el.endswith(".bam"):
-                # here pysam is used in order to be able to work on .bam files,
-                # that have a lower weight with respect to .sam files; thus the
-                # process is faster
-                samfile = pysam.AlignmentFile(self.folder + el, "rb")
-                bar_reads = progressbar.ProgressBar(max_value=progressbar.UnknownLength)
-                up = 0
-                header = samfile.header["SQ"]
-                clone = el[:el.find(".")]  # name of sample = columns
-                read_counts[clone] = []
-                read_counts_concat[clone] = []
-                chrom_column[clone] = []
-                bin_column[clone] = []
+            dir_list = os.listdir(self.folder)
+            for el in dir_list:
+                if el.endswith(".bam"):
+                    # here pysam is used in order to be able to work on .bam files,
+                    # that have a lower weight with respect to .sam files; thus the
+                    # process is faster
+                    samfile = pysam.AlignmentFile(self.folder + el, "rb")
+                    print("\n" + el)
+                    bar_reads = progressbar.ProgressBar(max_value=progressbar.UnknownLength)
+                    up = 0
+                    header = samfile.header["SQ"]
+                    clone = el[:el.find(".")]  # name of sample = columns
+                    read_counts[clone] = []
+                    read_counts_concat[clone] = []
+                    chrom_column[clone] = []
+                    bin_column[clone] = []
 
-                for line in header:
-                    chr_name = line["SN"]
-                    chr_length = line["LN"]
-                    # a list of univocal chromosome names is created
-                    if chr_name not in list_chrom:
-                        list_chrom.append(chr_name)
+                    for line in header:
+                        chr_name = line["SN"]
+                        chr_length = line["LN"]
+                        # a list of univocal chromosome names is created
+                        if chr_name not in list_chrom:
+                            list_chrom.append(chr_name)
 
-                    bins = chr_length // self.bin_size + 1  # number of bin in each chromosome
-                    read_counts[clone].append([0] * bins)
+                        bins = chr_length // self.bin_size + 1  # number of bin in each chromosome
+                        read_counts[clone].append([0] * bins)
 
-                    for i in range(bins):
-                        chrom_column[clone].append(chr_name)
-                        bin_column[clone].append(str(i))
+                        for i in range(bins):
+                            chrom_column[clone].append(chr_name)
+                            bin_column[clone].append(str(i))
 
-                # the list of univocal chromosome is used here in order to place the counts
-                # in the right chromosome
-                for chrom in list_chrom:
-                    # for each chromosome in the file, at position = bin_location in the list
-                    # of the chromosome, the element increments of one
-                    for read in samfile.fetch(chrom):
-                        # progress bar updating
-                        up += 1
-                        bar_reads.update(up)
-                        if read.cigarstring is not None and cigar is True:
-                            cigar_string = read.cigarstring
-                            if "S" not in cigar_string and "H" not in cigar_string:
-                                if str(read.flag) in self.flags:
-                                    bit_flag = bin(int(read.flag))  # binary format more easy to check
-                                    if bit_flag[-4] == "1":
-                                        read_pos = int(read.reference_start) + len(read.query_sequence) - 1
+                    # the list of univocal chromosome is used here in order to place the counts
+                    # in the right chromosome
+                    for chrom in list_chrom:
+                        # for each chromosome in the file, at position = bin_location in the list
+                        # of the chromosome, the element increments of one
+                        for read in samfile.fetch(chrom):
+                            # progress bar updating
+                            up += 1
+                            bar_reads.update(up)
+                            if other_cigar_filters:
+                                if read.cigarstring is not None:
+                                    if not any(clip in read.cigarstring for clip in cigar_clip) and \
+                                            not any(el in read.cigarstring for el in other_cigar_filters) and \
+                                            str(read.flag) in self.flags:
+                                        bit_flag = bin(int(read.flag))  # binary format more easy to check
+                                        if bit_flag[-4] == "1":
+                                            read_pos = int(read.reference_start) + len(read.query_sequence) - 1
+                                        else:
+                                            read_pos = int(read.reference_start)
+                                        # Place the read in the right bin
+                                        #
+                                        # Dividing the read position for the length of the bin, the exact bin in
+                                        # which the read maps is obtained
+                                        #
+                                        # The corresponding element of the list is set to 1 if no other reads
+                                        # mapped in that bin before and incremented by 1 otherwise
+                                        bin_location = read_pos // self.bin_size
+                                        read_counts[clone][list_chrom.index(chrom)][int(bin_location)] += 1
+
                                     else:
-                                        read_pos = int(read.reference_start)
-                                    # Place the read in the right bin
-                                    #
-                                    # Dividing the read position for the length of the bin, the exact bin in
-                                    # which the read maps is obtained
-                                    #
-                                    # The corresponding element of the list is set to 1 if no other reads
-                                    # mapped in that bin before and incremented by 1 otherwise
-                                    bin_location = read_pos // self.bin_size
-                                    read_counts[clone][list_chrom.index(chrom)][int(bin_location)] += 1
+                                        continue
+                            else:
+                                if read.cigarstring is not None:
+                                    # if "S" not in read.cigarstring and "H" not in read.cigarstring:
+                                    if not any(clip in read.cigarstring for clip in cigar_clip):
+                                        if str(read.flag) in self.flags:
+                                            bit_flag = bin(int(read.flag))  # binary format more easy to check
+                                            if bit_flag[-4] == "1":
+                                                read_pos = int(read.reference_start) + len(read.query_sequence) - 1
+                                            else:
+                                                read_pos = int(read.reference_start)
+                                            # Place the read in the right bin
+                                            #
+                                            # Dividing the read position for the length of the bin, the exact bin in
+                                            # which the read maps is obtained
+                                            #
+                                            # The corresponding element of the list is set to 1 if no other reads
+                                            # mapped in that bin before and incremented by 1 otherwise
+                                            bin_location = read_pos // self.bin_size
+                                            read_counts[clone][list_chrom.index(chrom)][int(bin_location)] += 1
 
-                                else:
-                                    continue
-                # in order to create a DataFrame, the lists of counts in read_counts
-                # have to be merged in a single list
-                for counts in read_counts[clone]:
-                    read_counts_concat[clone] += counts
+                                        else:
+                                            continue
 
-                samfile.close()
+                    # in order to create a DataFrame, the lists of counts in read_counts
+                    # have to be merged in a single list
+                    for counts in read_counts[clone]:
+                        read_counts_concat[clone] += counts
 
-        for j in range(len(bin_column[list(bin_column.keys())[0]])):
-            index_column.append(j)
-        # preparing for final DataFrame concatenation
-        index_column_df = pd.DataFrame({"index": index_column})
-        chrom_column_df = pd.DataFrame({"chr": chrom_column[list(chrom_column.keys())[0]]})
-        bin_column_df = pd.DataFrame({"bin": bin_column[list(bin_column.keys())[0]]})
-        read_counts_concat_df = pd.DataFrame(read_counts_concat)
+                    samfile.close()
 
-        read_count_df = pd.concat([index_column_df, chrom_column_df, bin_column_df, read_counts_concat_df],
-                                  axis=1)
-        # self.set_cigar_reads(read_count_df)
-        # return self.read_counts_cigar
-        return read_count_df
+            for j in range(len(bin_column[list(bin_column.keys())[0]])):
+                index_column.append(j)
+            # preparing for final DataFrame concatenation
+            index_column_df = pd.DataFrame({"index": index_column})
+            chrom_column_df = pd.DataFrame({"chr": chrom_column[list(chrom_column.keys())[0]]})
+            bin_column_df = pd.DataFrame({"bin": bin_column[list(bin_column.keys())[0]]})
+            read_counts_concat_df = pd.DataFrame(read_counts_concat)
+
+            read_count_df = pd.concat([index_column_df, chrom_column_df, bin_column_df, read_counts_concat_df],
+                                      axis=1)
+            # self.set_cigar_reads(read_count_df)
+            # return self.read_counts_cigar
+            return read_count_df
 
     def _load_reads(self):
         """Gives a data structure that stores information about the
@@ -269,6 +300,7 @@ class TestingBinReadCounter:
                 # that have a lower weight with respect to .sam files; thus the
                 # process is faster
                 samfile = pysam.AlignmentFile(self.folder + el, "rb")
+                print("\n" + el)
                 bar_reads = progressbar.ProgressBar(max_value=progressbar.UnknownLength)
                 up = 0
                 header = samfile.header["SQ"]
@@ -351,6 +383,7 @@ class TestingBinReadCounter:
         """
         if self.get_ref_name().endswith(".fa.gz"):
             with gzip.open(self.get_ref_path(), "rt") as reference:
+                print("\nN-counts; used reference is ", self.get_ref_name())
                 bar_Ns = progressbar.ProgressBar(max_value=progressbar.UnknownLength)
                 i = 0
                 index_n = []
@@ -392,6 +425,7 @@ class TestingBinReadCounter:
         dir_list = os.listdir(self.folder)
         for el in dir_list:
             if el.endswith(".bam"):
+                print("\nRead Bin Information for: ", el)
                 bar_id = progressbar.ProgressBar(max_value=progressbar.UnknownLength)
                 i = 0
                 samfile = pysam.AlignmentFile(self.folder + el, "rb")
@@ -433,7 +467,7 @@ class TestingBinReadCounter:
         with open(self.out + file_name, "rb") as input_param:
             return pickle.load(input_param)
 
-    def _export_pickle(self, reference=False, read_info=False):
+    def _export_pickle(self, other_cigar_filters, cigar=False, reference=False, read_info=False):
         """Export a pickle file containing all the parameters used for
         the counts and the completed data structures
 
@@ -447,14 +481,16 @@ class TestingBinReadCounter:
                                 imported in every script to dealing with the
                                 data structures
         """
-        with open(self.out + self.pickle_file_name(reference, read_info), "wb") as exp_file:
+        with open(self.out + self.pickle_file_name(other_cigar_filters, cigar, reference, read_info), "wb") as exp_file:
             # passing a python object to pickle, it writes the elements in
             # the same order in which they are specified
             out_data = {"bin_size": self.get_bin_size(),
                         "flags": self.get_flags(),
                         "bam": self.get_bam_name(),
+                        "cigar_filt": None,
+                        "other_cigar_filt": [],
+                        "read_counts": None,
                         "ref": None,
-                        "read_counts": self._load_reads(),
                         "n_counts": None,
                         "info": None,
                         "read_id_info": None}
@@ -467,6 +503,17 @@ class TestingBinReadCounter:
                 out_data["info"] = True
                 out_data["read_id_info"] = self._load_read_ID()
 
+            if cigar and other_cigar_filters:
+                out_data["cigar_filt"] = True
+                out_data["other_cigar_filt"] = True
+                out_data["read_counts"] = self._load_cigar_read_counts(other_cigar_filters, cigar)
+            elif cigar:
+                out_data["cigar_filt"] = True
+                out_data["read_counts"] = self._load_cigar_read_counts(other_cigar_filters, cigar)
+            else:
+                out_data["read_counts"] = self._load_reads()
+
+            print(exp_file, "\n", out_data)
             pickle.dump(out_data, exp_file)
 
     def stats(self):
@@ -506,8 +553,8 @@ if __name__ == "__main__":
                         default=["0", "16", "99", "147", "163", "83"],
                         # default="3",
                         help="""A list of the bitwise-flags in SAM format that identify the reads to be counted 
-                        during analyses; if different flags wants to be added, add them as single strings 
-                        (e.g. "177" "129")""")
+                        during analyses; if different flags wants to be added, add them as single strings
+                        \n(Specify it like e.g. "177" "129")""")
 
     parser.add_argument("-op", "--output_pickle",
                         default="./",
@@ -526,9 +573,17 @@ if __name__ == "__main__":
                         help="""If specified, a data-frame with information on the read ID, and if the read 
                         and its mate map in the same bin in the same chromosome, is created""")
 
-    parser.add_argument("-c", "--cigar",
+    parser.add_argument("-c", "--cigar_filter",
                         action="store_true",
-                        help="""""")
+                        help="""If specified, the reads mapped with soft and hard clipping (S and H), are taken out 
+                        form the read counts; it returns a data frame with same structure of the default one""")
+
+    parser.add_argument("-cf", "--other_cigar_filters",
+                        type=str,
+                        nargs="+",
+                        default=[],
+                        help="""An additional parameter to exclude other reads from the count, on the bases of other 
+                        information in their cigar, like indels.\n(Specify it like e.g. "I" "D")""")
 
     args = parser.parse_args()
     dict_args = vars(parser.parse_args([]))
@@ -541,12 +596,13 @@ if __name__ == "__main__":
 
     counter = TestingBinReadCounter(args.folder, args.bin_size, flags, args.reference, args.output_pickle)
 
-    if args.cigar:
-        print(counter.cigar_read_counts(args.cigar))
-    else:
-       counter._load_reads()
+    # if args.cigar:
+    #     print(counter._load_cigar_read_counts(args.other_cigar_filters, args.cigar))
+    # else:
+    #     print(counter._load_reads())
 
-    print(counter.stats())
+    counter._export_pickle(args.other_cigar_filters, args.cigar_filter, args.reference, args.read_info)
+    # print(counter.stats())
     # if args.reference and args.read_info:
     #     counter._export_pickle(reference=True, read_info=True)
     #

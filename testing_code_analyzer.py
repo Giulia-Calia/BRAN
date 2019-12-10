@@ -90,7 +90,7 @@ class TestingBinReadAnalyzer:
     def set_fold_change(self, diff):
         self.fold_change = diff
 
-    def load_data(self, reference=None, read_info=None, verbose=False):
+    def load_data(self, other_cigar_filters, cigar_filter=None, reference=None, read_info=None, verbose=False):
         """If the pickle file is already present in the folder and the parameters
         are not changed, the data structures were kept, otherwise it runs the
         methods _export_pickle() and load_data() of the imported class BinReadCounter
@@ -98,6 +98,8 @@ class TestingBinReadAnalyzer:
         data-structures
 
         Args:
+            cigar_filter (bool)
+            other_cigar_filters (bool)
             reference (bool): true if the reference is necessary
             read_info (bool): true if read info are necessary
             verbose (bool): default is False, but if set to True, it allows to print
@@ -127,9 +129,12 @@ class TestingBinReadAnalyzer:
                 #     print("ok")
                 #     counter = pickle.load(input_pickle)
                 parameters = counter._load_pickle(file)
+                # print(parameters)
                 if parameters["bin_size"] == self.bin_size and \
                         parameters["flags"] == self.flags and \
                         parameters["bam"] == bam_files and \
+                        parameters["cigar_filt"] == cigar_filter and \
+                        parameters["other_cigar_filt"] == other_cigar_filters and \
                         parameters["ref"] == counter.get_ref_name() and \
                         parameters["info"] == read_info:
                     found = True
@@ -147,20 +152,20 @@ class TestingBinReadAnalyzer:
                       "BinReadCounter is running with actual parameters\n",
                       "IT COULD TAKE A WHILE to create and import the pickle file")
 
-            counter._export_pickle(reference, read_info)
-            name_pickle = counter.pickle_file_name(reference, read_info)
+            counter._export_pickle(other_cigar_filters, cigar_filter, reference, read_info)
+            name_pickle = counter.pickle_file_name(other_cigar_filters, cigar_filter, reference, read_info)
             parameters = counter._load_pickle(name_pickle)
             self.set_parameters(parameters)
             return self.parameters
 
-    def normalize_bins(self, df_counts):
+    def normalize_bins(self):  # , df_counts
         """This method handles the normalization of the raw read_counts
         using an R package, edgeR, imported thanks to rpy2 that provides
         an already implemented function, cpm, for the normalization of a
         table of counts, as well as a series of other function specifically
         implemented for RNA-Seq"""
-        # read_counts = self.parameters["read_counts"]
-        read_counts = df_counts
+        read_counts = self.parameters["read_counts"]
+        # read_counts = df_counts
 
         # fig = px.histogram(read_counts, x="FEM_ref_IlluminaPE_aligns_Primary")
         # fig.show()
@@ -179,15 +184,19 @@ class TestingBinReadAnalyzer:
 
         read_counts_edger = {}  # a dictionary of sample: vector_of_counts to work with edger
         col_list = list(read_counts.columns)
+        group = []
         for i in range(len(col_list)):
             if col_list[i] != "index" and col_list[i] != "chr" and col_list[i] != 'bin':
                 # creates an element of the dictionary [sample_name]: r_vector_of_counts
                 read_counts_edger[col_list[i]] = robjects.IntVector(read_counts[col_list[i]])
-
+                if "ref_ref" in col_list[i]:
+                    group.append(1)
+                else:
+                    group.append(2)
         read_counts_edger_df = robjects.DataFrame(read_counts_edger)  # R data frame
 
         # create a DGEList
-        dge_list = edger.DGEList(counts=read_counts_edger_df, group=robjects.IntVector([2, 2, 2, 1]))
+        dge_list = edger.DGEList(counts=read_counts_edger_df, group=robjects.IntVector(group))
         print(dge_list)
 
         # calc norm factors
@@ -212,7 +221,6 @@ class TestingBinReadAnalyzer:
         # fig.show()
 
         # plot all samples
-
         norm_counts_to_plot = []
         for col in norm_counts_df.columns:
             norm_counts_to_plot.append(norm_counts_df[col])
@@ -225,13 +233,13 @@ class TestingBinReadAnalyzer:
         self.set_norm(norm_counts)
         return self.norm  # an edger object (table) of counts
 
-    def get_fold_change(self, df_counts, control_name=None):
+    def get_fold_change(self, control_name=None):  # df_counts,
         """This method calculates the pairwise logFoldChange for the different clones
         against the control plant counts, in order to see, if are present, significant
         differences in terms of mapping reads"""
         if control_name is not None:
-            # read_counts = self.parameters["read_counts"]
-            read_counts = df_counts
+            read_counts = self.parameters["read_counts"]
+            # read_counts = df_counts
             control = control_name
             read_counts_edger = {}  # {}  # a dictionary of sample: vector_of_counts to work with edger
             bcv = 0.1  # reasonable dispersion value; typical values for common BCV (square-root dispersion) of data-set
@@ -288,7 +296,7 @@ class TestingBinReadAnalyzer:
 
         else:
             print("No control group is specified, please try again, specifying the column name of control file as "
-                  "parameter '-c'")
+                  "parameter '-co'")
 
 
 
@@ -305,6 +313,7 @@ class TestingBinReadAnalyzer:
         # - plot of the portion of chromosome corresponding to the bin
         #   - if the significant bin is more than one check if they belong to the same chromosome
         #     and plot the entire chromosome
+        pass
 
     def add_ns_trace(self, fig, reference=None, chrom=None):
         """This method is used in other plotting methods, in order to add the
@@ -448,7 +457,7 @@ class TestingBinReadAnalyzer:
 
         fig.show()
 
-    def plot_all(self, df_counts, reference, ns=False, fig=go.Figure()):
+    def plot_all(self, reference, ns=False, fig=go.Figure()):  # df_counts,
         """This method allows to obtain a scatter-plot of raw_read_counts
         of all chromosomes and all samples
 
@@ -461,8 +470,8 @@ class TestingBinReadAnalyzer:
         Returns:
             A scatter-plot of counts
         """
-        # read_counts = self.parameters["read_counts"]
-        read_counts = df_counts
+        read_counts = self.parameters["read_counts"]
+        # read_counts = df_counts
         coordinates_x = []
         coordinates_y = []
 
@@ -485,7 +494,7 @@ class TestingBinReadAnalyzer:
         for chrom in chromosomes:
             single_df = read_counts[read_counts["chr"] == "CH." + chrom]
             coordinates_x.append(single_df["index"].mean())
-            coordinates_y.append(-2)
+            coordinates_y.append(-1)
             if int(chrom[chrom.find("r") + 1:]) % 2 == 0:
                 fig.add_shape(go.layout.Shape(type="rect",
                                               xref="x",
@@ -642,7 +651,7 @@ class TestingBinReadAnalyzer:
 
         fig.show()
 
-    def plot_norm_data_all(self, df_counts, reference, ns=False, fig=go.Figure()):
+    def plot_norm_data_all(self, reference, ns=False, fig=go.Figure()):  # df_counts,
         """This method allows to obtain a scatter-plot of normalized_read_counts
         in all chromosomes and for all samples
 
@@ -655,8 +664,8 @@ class TestingBinReadAnalyzer:
         Returns:
             A scatter-plot of normalized counts
         """
-        # read_counts = self.parameters["read_counts"]
-        read_counts = df_counts
+        read_counts = self.parameters["read_counts"]
+        # read_counts = df_counts
         coordinates_x = []
         coordinates_y = []
         chromosomes = []
@@ -715,8 +724,9 @@ class TestingBinReadAnalyzer:
 
         fig.show()
 
-    def plot_sig_data(self, df_counts, bs, fig=go.Figure()):
-        read_counts = df_counts
+    def plot_sig_data(self, bs, fig=go.Figure()):  #  df_counts,
+        # read_counts = df_counts
+        read_counts = self.parameters["read_counts"]
         fold_change = self.fold_change
         coordinates_x = []
         coordinates_y = []
@@ -844,12 +854,25 @@ if __name__ == "__main__":
                         action="store_true",
                         help="""Specify if the Ns counts has to be included in the plot of the read counts""")
 
-    parser.add_argument("-c", "--control_name",
+    parser.add_argument("-co", "--control_name",
                         type=str,
                         default=None,
                         help="""The name of the control group for the fold_change analysis, it should be the same 
                         name as the column name in the read_counts data structure, thus the name of the alignment 
                         file used as baseline without the ".bam" string""")
+
+    parser.add_argument("-c", "--cigar_filter",
+                        action="store_true",
+                        default=None,
+                        help="""If specified, the reads mapped with soft and hard clipping (S and H), are taken out 
+                            form the read counts; it returns a data frame with same structure of the default one""")
+
+    parser.add_argument("-cf", "--other_cigar_filters",
+                        type=str,
+                        nargs="+",
+                        default=[],
+                        help="""An additional parameter to exclude other reads from the count, on the bases of other 
+                            information in their cigar, like indels.\n(Specify it like e.g. "I" "D")""")
 
     args = parser.parse_args()
     dict_args = vars(parser.parse_args([]))
@@ -861,47 +884,55 @@ if __name__ == "__main__":
 
     analyzer = TestingBinReadAnalyzer(args.folder, args.bin_size, args.reference, flags, args.output_pickle)
 
-    analyzer.load_data(reference=args.reference, read_info=args.read_info, verbose=True)
-    with open("../all_samples_pickles/BRAN30000_df.p", "rb") as input_param:
-        param = pickle.load(input_param)
-        analyzer.normalize_bins(param["read_counts"])
-        analyzer.get_fold_change(param["read_counts"], args.control_name)
-        # analyzer.plot_all(param["read_counts"], args.reference)
-        # analyzer.plot_norm_data_all(param["read_counts"], args.reference)
-        analyzer.plot_sig_data(param["read_counts"], param["bin_size"])
-        # analyzer.get_sig_pos(param["read_counts"])
+    analyzer.load_data(other_cigar_filters=args.other_cigar_filters,
+                       cigar_filter=args.cigar_filter,
+                       reference=args.reference,
+                       read_info=args.read_info,
+                       verbose=True)
+
+    # with open("../all_samples_pickles/BRAN30000_df.p", "rb") as input_param:
+    #     param = pickle.load(input_param)
+    #     analyzer.normalize_bins(param["read_counts"])
+    #     analyzer.get_fold_change(param["read_counts"], args.control_name)
+    #     # analyzer.plot_all(param["read_counts"], args.reference)
+    #     # analyzer.plot_norm_data_all(param["read_counts"], args.reference)
+    #     analyzer.plot_sig_data(param["read_counts"], param["bin_size"])
+    #     # analyzer.get_sig_pos(param["read_counts"])
 
     # if not os.path.exists("plots"):
     #     os.mkdir("plots")
+    analyzer.normalize_bins()
+    analyzer.get_fold_change(args.control_name)
 
-    # if args.chromosome and args.sample:
-    #     if args.Ns_count:
-    #         analyzer.plot_chrom_sample(args.reference, args.chromosome, args.sample, args.Ns_count)
-    #         analyzer.plot_norm_data_chr_sample(args.reference, args.chromosome, args.sample, args.Ns_count)
-    #     else:
-    #         analyzer.plot_chrom_sample(args.reference, args.chromosome, args.sample)
-    #         analyzer.plot_norm_data_chr_sample(args.reference, args.chromosome, args.sample)
-    #
-    # elif args.chromosome:
-    #     if args.Ns_count:
-    #         analyzer.plot_chromosome(args.reference, args.chromosome, args.Ns_count)
-    #         analyzer.plot_norm_data_chr(args.reference, args.chromosome, args.Ns_count)
-    #     else:
-    #         analyzer.plot_chromosome(args.reference, args.chromosome)
-    #         analyzer.plot_norm_data_chr(args.reference, args.chromosome)
-    #
-    # elif args.sample:
-    #     if args.Ns_count:
-    #         analyzer.plot_sample(args.reference, args.sample, args.Ns_count)
-    #         analyzer.plot_norm_data_sample(args.reference, args.sample, args.Ns_count)
-    #     else:
-    #         analyzer.plot_sample(args.reference, args.sample)
-    #         analyzer.plot_norm_data_sample(args.reference, args.sample)
-    #
-    # else:
-    #     if args.Ns_count:
-    #         analyzer.plot_all(args.reference, args.Ns_count)
-    #         analyzer.plot_norm_data_all(args.reference, args.Ns_count)
-    #     else:
-    #         analyzer.plot_all(args.reference)
-    #         analyzer.plot_norm_data_all(args.reference)
+    if args.chromosome and args.sample:
+        if args.Ns_count:
+            analyzer.plot_chrom_sample(args.reference, args.chromosome, args.sample, args.Ns_count)
+            analyzer.plot_norm_data_chr_sample(args.reference, args.chromosome, args.sample, args.Ns_count)
+        else:
+            analyzer.plot_chrom_sample(args.reference, args.chromosome, args.sample)
+            analyzer.plot_norm_data_chr_sample(args.reference, args.chromosome, args.sample)
+
+    elif args.chromosome:
+        if args.Ns_count:
+            analyzer.plot_chromosome(args.reference, args.chromosome, args.Ns_count)
+            analyzer.plot_norm_data_chr(args.reference, args.chromosome, args.Ns_count)
+        else:
+            analyzer.plot_chromosome(args.reference, args.chromosome)
+            analyzer.plot_norm_data_chr(args.reference, args.chromosome)
+
+    elif args.sample:
+        if args.Ns_count:
+            analyzer.plot_sample(args.reference, args.sample, args.Ns_count)
+            analyzer.plot_norm_data_sample(args.reference, args.sample, args.Ns_count)
+        else:
+            analyzer.plot_sample(args.reference, args.sample)
+            analyzer.plot_norm_data_sample(args.reference, args.sample)
+
+    else:
+        if args.Ns_count:
+            analyzer.plot_all(args.reference, args.Ns_count)
+            analyzer.plot_norm_data_all(args.reference, args.Ns_count)
+        else:
+            analyzer.plot_all(args.reference)
+            analyzer.plot_norm_data_all(args.reference)
+            analyzer.plot_sig_data(args.bin_size)
