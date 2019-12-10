@@ -26,10 +26,10 @@ import os
 import argparse
 import pickle
 import plotly.graph_objects as go
-import plotly.express as px  # plot norm_counts only one sample
-import plotly.figure_factory as ff  # plot norm_counts multiple sample
+# import plotly.express as px  # plot norm_counts only one sample
+# import plotly.figure_factory as ff  # plot norm_counts multiple sample
 import pandas as pd
-import numpy as np
+# import numpy as np
 from testing_code_counter import TestingBinReadCounter
 import rpy2.robjects as robjects
 import rpy2.robjects.packages as rpackages
@@ -197,16 +197,19 @@ class TestingBinReadAnalyzer:
 
         # create a DGEList
         dge_list = edger.DGEList(counts=read_counts_edger_df, group=robjects.IntVector(group))
-        print(dge_list)
+        # print(dge_list)
 
         # calc norm factors
         norm_fact = edger.calcNormFactors(dge_list)
-        print(norm_fact)
+        # print(norm_fact)
 
         # normalization function
         # norm_counts = edger.cpm(read_counts_edger_df, log=True)
         norm_counts = edger.cpm(norm_fact, normalized_lib_sizes=True)
+        print(norm_counts.colnames)
         # print(norm_counts)
+        # norm_counts_rdf = robjects.DataFrame(norm_counts)
+        # norm_counts_df = pandas2ri.ri2py_dataframe(norm_counts_rdf)
         norm_counts_dict = {}
         for i in range(1, norm_counts.ncol + 1):
             norm_counts_dict[norm_counts.colnames[i-1]] = list(norm_counts.rx(True, i))
@@ -216,15 +219,15 @@ class TestingBinReadAnalyzer:
         # plot only one sample
 
         # norm_counts_df["index"] = read_counts["index"]
-        # # norm_counts_df["Ch15_3_1_ref_IlluminaPE_aligns_Primary"] = np.log(norm_counts_df["Ch15_3_1_ref_IlluminaPE_aligns_Primary"])
-        # fig = px.histogram(norm_counts_df, x="Ch15_3_1_ref_IlluminaPE_aligns_Primary")
-        # fig.show()
+        # norm_counts_df["Ch15_3_1_ref_IlluminaPE_aligns_Primary"] =
+        # np.log(norm_counts_df["Ch15_3_1_ref_IlluminaPE_aligns_Primary"]) fig = px.histogram(norm_counts_df,
+        # x="Ch15_3_1_ref_IlluminaPE_aligns_Primary") fig.show()
 
         # plot all samples
-        norm_counts_to_plot = []
-        for col in norm_counts_df.columns:
-            norm_counts_to_plot.append(norm_counts_df[col])
-        fig_norm = ff.create_distplot(norm_counts_to_plot, group_labels=norm_counts_df.columns)
+        # norm_counts_to_plot = []
+        # for col in norm_counts_df.columns:
+        #     norm_counts_to_plot.append(norm_counts_df[col])
+        # fig_norm = ff.create_distplot(norm_counts_to_plot, group_labels=norm_counts_df.columns)
         # fig_norm = ff.create_distplot(norm_counts_to_plot, group_labels=norm_counts_df.columns, bin_size=0.05)
         # fig_norm.show()
 
@@ -290,7 +293,7 @@ class TestingBinReadAnalyzer:
                     fold_change[col_name] = exact_test_pd_df
 
                     # print(edger.topTags(exact_test))
-            print(fold_change)
+            # print(fold_change)
             self.set_fold_change(fold_change)
             return self.fold_change
 
@@ -298,22 +301,31 @@ class TestingBinReadAnalyzer:
             print("No control group is specified, please try again, specifying the column name of control file as "
                   "parameter '-co'")
 
-
-
-    def get_sig_pos(self, df_counts):
+    def get_sig_pos(self):  # , df_counts
         """This method return the chromosome position in terms of basis, of bins
         retained significantly different from the control"""
         fold_change = self.fold_change
-        read_counts = df_counts
-        sig_fold = {}
-        # here I have to retrieve the information about:
-        # - significantly different bins
-        # - each bin to which chromosome is associated
-        # - position of the bin in the chromosome
-        # - plot of the portion of chromosome corresponding to the bin
-        #   - if the significant bin is more than one check if they belong to the same chromosome
-        #     and plot the entire chromosome
-        pass
+        read_count = self.parameters["read_counts"]
+        # read_counts = df_counts
+        sig_data = {"clone": [], "bin": [], "chr": [], "genome_position": []}
+
+        print(fold_change)
+        for el in fold_change:
+            sig_fc = fold_change[el][fold_change[el]["logFC"] > 1.5]
+            sig_row_index = sig_fc.index.values
+            for i in range(len(sig_row_index)):
+                sig_data["clone"].append(el)
+                sig_data["bin"].append(read_count["bin"].iloc[sig_row_index[i]])
+                sig_data["chr"].append(read_count["chr"].iloc[sig_row_index[i]])
+                sig_data["genome_position"].append(sig_row_index[i] * self.parameters["bin_size"])
+        sig_data_df = pd.DataFrame(sig_data)
+        print(sig_data_df)
+        #     print(sig_fc.index.values)
+        #     print(fc_data)
+        #     if fc_data[fc_data > 1.5]:
+        #         print(fc_data[fc_data["logFC"] > 1.5])
+        # here I have to retrieve information about th position of the bin in the chromosome
+        return sig_data_df
 
     def add_ns_trace(self, fig, reference=None, chrom=None):
         """This method is used in other plotting methods, in order to add the
@@ -724,9 +736,9 @@ class TestingBinReadAnalyzer:
 
         fig.show()
 
-    def plot_sig_data(self, bs, fig=go.Figure()):  #  df_counts,
-        # read_counts = df_counts
-        read_counts = self.parameters["read_counts"]
+    def plot_sig_data(self, df_counts, bs, fig=go.Figure()):  #  df_counts,
+        read_counts = df_counts
+        # read_counts = self.parameters["read_counts"]
         fold_change = self.fold_change
         coordinates_x = []
         coordinates_y = []
@@ -890,49 +902,53 @@ if __name__ == "__main__":
                        read_info=args.read_info,
                        verbose=True)
 
-    # with open("../all_samples_pickles/BRAN30000_df.p", "rb") as input_param:
-    #     param = pickle.load(input_param)
-    #     analyzer.normalize_bins(param["read_counts"])
-    #     analyzer.get_fold_change(param["read_counts"], args.control_name)
-    #     # analyzer.plot_all(param["read_counts"], args.reference)
-    #     # analyzer.plot_norm_data_all(param["read_counts"], args.reference)
-    #     analyzer.plot_sig_data(param["read_counts"], param["bin_size"])
-    #     # analyzer.get_sig_pos(param["read_counts"])
-
     # if not os.path.exists("plots"):
     #     os.mkdir("plots")
     analyzer.normalize_bins()
     analyzer.get_fold_change(args.control_name)
+    analyzer.get_sig_pos()
 
-    if args.chromosome and args.sample:
-        if args.Ns_count:
-            analyzer.plot_chrom_sample(args.reference, args.chromosome, args.sample, args.Ns_count)
-            analyzer.plot_norm_data_chr_sample(args.reference, args.chromosome, args.sample, args.Ns_count)
-        else:
-            analyzer.plot_chrom_sample(args.reference, args.chromosome, args.sample)
-            analyzer.plot_norm_data_chr_sample(args.reference, args.chromosome, args.sample)
+    # if args.chromosome and args.sample:
+    #     if args.Ns_count:
+    #         analyzer.plot_chrom_sample(args.reference, args.chromosome, args.sample, args.Ns_count)
+    #         analyzer.plot_norm_data_chr_sample(args.reference, args.chromosome, args.sample, args.Ns_count)
+    #     else:
+    #         analyzer.plot_chrom_sample(args.reference, args.chromosome, args.sample)
+    #         analyzer.plot_norm_data_chr_sample(args.reference, args.chromosome, args.sample)
+    #
+    # elif args.chromosome:
+    #     if args.Ns_count:
+    #         analyzer.plot_chromosome(args.reference, args.chromosome, args.Ns_count)
+    #         analyzer.plot_norm_data_chr(args.reference, args.chromosome, args.Ns_count)
+    #     else:
+    #         analyzer.plot_chromosome(args.reference, args.chromosome)
+    #         analyzer.plot_norm_data_chr(args.reference, args.chromosome)
+    #
+    # elif args.sample:
+    #     if args.Ns_count:
+    #         analyzer.plot_sample(args.reference, args.sample, args.Ns_count)
+    #         analyzer.plot_norm_data_sample(args.reference, args.sample, args.Ns_count)
+    #     else:
+    #         analyzer.plot_sample(args.reference, args.sample)
+    #         analyzer.plot_norm_data_sample(args.reference, args.sample)
+    #
+    # else:
+    #     if args.Ns_count:
+    #         analyzer.plot_all(args.reference, args.Ns_count)
+    #         analyzer.plot_norm_data_all(args.reference, args.Ns_count)
+    #     else:
+    #         analyzer.plot_all(args.reference)
+    #         analyzer.plot_norm_data_all(args.reference)
+    #         analyzer.plot_sig_data(args.bin_size)
 
-    elif args.chromosome:
-        if args.Ns_count:
-            analyzer.plot_chromosome(args.reference, args.chromosome, args.Ns_count)
-            analyzer.plot_norm_data_chr(args.reference, args.chromosome, args.Ns_count)
-        else:
-            analyzer.plot_chromosome(args.reference, args.chromosome)
-            analyzer.plot_norm_data_chr(args.reference, args.chromosome)
-
-    elif args.sample:
-        if args.Ns_count:
-            analyzer.plot_sample(args.reference, args.sample, args.Ns_count)
-            analyzer.plot_norm_data_sample(args.reference, args.sample, args.Ns_count)
-        else:
-            analyzer.plot_sample(args.reference, args.sample)
-            analyzer.plot_norm_data_sample(args.reference, args.sample)
-
-    else:
-        if args.Ns_count:
-            analyzer.plot_all(args.reference, args.Ns_count)
-            analyzer.plot_norm_data_all(args.reference, args.Ns_count)
-        else:
-            analyzer.plot_all(args.reference)
-            analyzer.plot_norm_data_all(args.reference)
-            analyzer.plot_sig_data(args.bin_size)
+    # ---------------------------complete_file_pickle--------------------------------
+    # with open("/home/giulia/Downloads/BRAN30000_df_c.p", "rb") as input_param:
+    #     param = pickle.load(input_param)
+    #     print(param)
+    #     analyzer.normalize_bins(param["read_counts"])
+    #     analyzer.get_fold_change(param["read_counts"], args.control_name)
+    #     # # analyzer.plot_all(param["read_counts"], args.reference)
+    #     # # analyzer.plot_norm_data_all(param["read_counts"], args.reference)
+    #     analyzer.plot_sig_data(param["read_counts"], param["bin_size"])
+    #     # # analyzer.get_sig_pos(param["read_counts"])
+    # ------------------------------------------------------------------------------
