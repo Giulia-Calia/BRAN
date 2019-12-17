@@ -26,15 +26,16 @@ import os
 import argparse
 import pickle
 import plotly.graph_objects as go
-# import plotly.express as px  # plot norm_counts only one sample
-# import plotly.figure_factory as ff  # plot norm_counts multiple sample
 import pandas as pd
-# import numpy as np
 from testing_code_counter import TestingBinReadCounter
 import rpy2.robjects as robjects
 import rpy2.robjects.packages as rpackages
 from rpy2.robjects.packages import importr
 from rpy2.robjects import pandas2ri
+
+import numpy as np
+import plotly.express as px  # plot norm_counts only one sample
+import plotly.figure_factory as ff  # plot norm_counts multiple sample
 
 pandas2ri.activate()
 base = importr('base')
@@ -80,6 +81,7 @@ class TestingBinReadAnalyzer:
         self.parameters = None
         self.norm = None
         self.fold_change = None
+        self.sig_fc = None
 
     def set_parameters(self, param):
         self.parameters = param
@@ -89,6 +91,9 @@ class TestingBinReadAnalyzer:
 
     def set_fold_change(self, diff):
         self.fold_change = diff
+
+    def set_sig_fc(self, fc):
+        self.sig_fc = fc
 
     def load_data(self, other_cigar_filters, cigar_filter=None, reference=None, read_info=None, verbose=False):
         """If the pickle file is already present in the folder and the parameters
@@ -112,15 +117,16 @@ class TestingBinReadAnalyzer:
             count
         """
         counter = TestingBinReadCounter(self.folder, self.bin_size, self.flags, self.ref, self.out)
-        found = False
+        found = None
         bam_files = []
+        i = 0
         list_bam_dir = os.listdir(self.folder)
         list_pick_dir = os.listdir(self.out)
-        # verify if a pickle file is present in the desired folder
         for file in list_bam_dir:
             if file.endswith(".bam"):
                 bam_files.append(file[:file.find(".bam")])
 
+        # verify if a pickle file is present in the desired folder
         for file in list_pick_dir:
             if file.endswith(".p"):
                 # if so, checks if the parameters for the building-up of
@@ -128,37 +134,47 @@ class TestingBinReadAnalyzer:
                 # with open(file, "rb") as input_pickle:
                 #     print("ok")
                 #     counter = pickle.load(input_pickle)
-                parameters = counter._load_pickle(file)
-                # print(parameters)
-                if parameters["bin_size"] == self.bin_size and \
-                        parameters["flags"] == self.flags and \
-                        parameters["bam"] == bam_files and \
-                        parameters["cigar_filt"] == cigar_filter and \
-                        parameters["other_cigar_filt"] == other_cigar_filters and \
-                        parameters["ref"] == counter.get_ref_name() and \
-                        parameters["info"] == read_info:
-                    found = True
-                    if verbose:
-                        print("Same parameters; import from: ", file)
-                    self.set_parameters(parameters)
-                    return self.parameters
+                try:
+                    parameters = counter._load_pickle(file)
+                    if parameters["bin_size"] == self.bin_size and \
+                            parameters["flags"] == self.flags and \
+                            all(el in parameters["bam"] for el in bam_files) and \
+                            parameters["cigar_filt"] == cigar_filter and \
+                            parameters["other_cigar_filt"] == other_cigar_filters and \
+                            parameters["ref"] == counter.get_ref_name() and \
+                            parameters["info"] == read_info:
+                        found = True
+                        if verbose:
+                            print("Same parameters; import from: ", file)
+                        counter._load_unmapped_reads(other_cigar_filters, cigar_filter, reference, read_info)
+
+                        self.set_parameters(parameters)
+                        return self.parameters
+
+                except:
+                    i += 1
+                    continue
+        if verbose:
+            print("Warning:\nException occurred - other processes running at this moment: ", i)
         if not found:
             # if not found, none of the pickle files in the current directory
             # have the same parameters of the actual running or a file pickle is not p
             # resent at all in the directory thus the algorithm uses the modules of the
             # BinReadCounter to calculate the new data structures and it saves a new pickle file
             if verbose:
-                print(" Parameters are changed or no pickle file exists\n",
-                      "BinReadCounter is running with actual parameters\n",
-                      "IT COULD TAKE A WHILE to create and import the pickle file")
+                print("Parameters are changed or no pickle file exists",
+                      "\nBinReadCounter is running with actual parameters",
+                      "\nIT COULD TAKE A WHILE to create and import the pickle file")
 
             counter._export_pickle(other_cigar_filters, cigar_filter, reference, read_info)
             name_pickle = counter.pickle_file_name(other_cigar_filters, cigar_filter, reference, read_info)
             parameters = counter._load_pickle(name_pickle)
+            counter._load_unmapped_reads(other_cigar_filters, cigar_filter, reference, read_info)
+
             self.set_parameters(parameters)
             return self.parameters
 
-    def normalize_bins(self):  # , df_counts
+    def normalize_bins(self):  # , df_counts, bin_size
         """This method handles the normalization of the raw read_counts
         using an R package, edgeR, imported thanks to rpy2 that provides
         an already implemented function, cpm, for the normalization of a
@@ -166,22 +182,7 @@ class TestingBinReadAnalyzer:
         implemented for RNA-Seq"""
         read_counts = self.parameters["read_counts"]
         # read_counts = df_counts
-
-        # fig = px.histogram(read_counts, x="FEM_ref_IlluminaPE_aligns_Primary")
-        # fig.show()
-        # counts_to_plot = []
-        # col_labels = []
-        # for col in read_counts.columns:
-        #     if col != "index" and col != "chr" and col != 'bin':
-        #         counts_to_plot.append(read_counts[col])
-        #         col_labels.append(col)
-        # fig = ff.create_distplot(counts_to_plot, group_labels=col_labels)
-        # fig.show()
-
-        # the following line has to be deleted when the class will work on the entire .bam files
-        # chr1 = read_counts[read_counts['chr'] == 'CH.chr1']
         # the edgeR package is imported using rpy2 syntax to access to all its built-in functions
-
         read_counts_edger = {}  # a dictionary of sample: vector_of_counts to work with edger
         col_list = list(read_counts.columns)
         group = []
@@ -195,66 +196,71 @@ class TestingBinReadAnalyzer:
                     group.append(2)
         read_counts_edger_df = robjects.DataFrame(read_counts_edger)  # R data frame
 
-        # create a DGEList
+        # --create a DGEList obj--
         dge_list = edger.DGEList(counts=read_counts_edger_df, group=robjects.IntVector(group))
-        # print(dge_list)
-
-        # calc norm factors
+        # --calc norm factors--
         norm_fact = edger.calcNormFactors(dge_list)
-        # print(norm_fact)
-
-        # normalization function
+        # --normalization function--
         # norm_counts = edger.cpm(read_counts_edger_df, log=True)
-        norm_counts = edger.cpm(norm_fact, normalized_lib_sizes=True)
-        print(norm_counts.colnames)
-        # print(norm_counts)
-        # norm_counts_rdf = robjects.DataFrame(norm_counts)
-        # norm_counts_df = pandas2ri.ri2py_dataframe(norm_counts_rdf)
-        norm_counts_dict = {}
-        for i in range(1, norm_counts.ncol + 1):
-            norm_counts_dict[norm_counts.colnames[i-1]] = list(norm_counts.rx(True, i))
-        norm_counts_df = pd.DataFrame(norm_counts_dict)
-        print(norm_counts_df)
+        norm_counts = edger.cpm(norm_fact, normalized_lib_sizes=True)  # the log is calculated with fold-change function
 
-        # plot only one sample
-
-        # norm_counts_df["index"] = read_counts["index"]
-        # norm_counts_df["Ch15_3_1_ref_IlluminaPE_aligns_Primary"] =
-        # np.log(norm_counts_df["Ch15_3_1_ref_IlluminaPE_aligns_Primary"]) fig = px.histogram(norm_counts_df,
-        # x="Ch15_3_1_ref_IlluminaPE_aligns_Primary") fig.show()
-
-        # plot all samples
-        # norm_counts_to_plot = []
-        # for col in norm_counts_df.columns:
-        #     norm_counts_to_plot.append(norm_counts_df[col])
-        # fig_norm = ff.create_distplot(norm_counts_to_plot, group_labels=norm_counts_df.columns)
-        # fig_norm = ff.create_distplot(norm_counts_to_plot, group_labels=norm_counts_df.columns, bin_size=0.05)
-        # fig_norm.show()
-
+        # norm_counts_dict = {}
+        # for i in range(1, norm_counts.ncol + 1):
+        #     norm_counts_dict[norm_counts.colnames[i - 1]] = list(norm_counts.rx(True, i))
+        # norm_counts_df = pd.DataFrame(norm_counts_dict)
         # print(norm_counts_df)
-        # print(list(norm_counts.rx(True, 1)))
+
         self.set_norm(norm_counts)
         return self.norm  # an edger object (table) of counts
 
-    def get_fold_change(self, control_name=None):  # df_counts,
+    def get_fold_change(self, control_name=None):  # df_counts, bin_size,
         """This method calculates the pairwise logFoldChange for the different clones
         against the control plant counts, in order to see, if are present, significant
         differences in terms of mapping reads"""
         if control_name is not None:
             read_counts = self.parameters["read_counts"]
             # read_counts = df_counts
+
             control = control_name
             read_counts_edger = {}  # {}  # a dictionary of sample: vector_of_counts to work with edger
+            col_list = list(read_counts.columns)
+            fold_change = {}
+
             bcv = 0.1  # reasonable dispersion value; typical values for common BCV (square-root dispersion) of data-set
             # arising from well-controlled experiments are 0.4 for human data, 0.1 for data of genetically identical
             # model organisms or 0.01 fo technical replicates
-            col_list = list(read_counts.columns)
-            fold_change = {}
+
             for i in range(len(col_list)):
                 if col_list[i] != "index" and col_list[i] != "chr" and col_list[i] != 'bin':
                     read_counts_edger[col_list[i]] = robjects.r.matrix(robjects.IntVector(read_counts[col_list[i]]))
 
-            # with raw data
+            # --with normalized data--
+            for i in range(1, self.norm.ncol + 1):
+                col = self.norm.rx(True, i)
+                col_name = self.norm.colnames[i - 1]
+                if col_name != control:
+                    print(col_name)
+                    tmp_dict = {col_name: col, control: self.norm.rx(True, control)}
+                    tmp_df = robjects.DataFrame(tmp_dict)
+                    dge_list = edger.DGEList(robjects.DataFrame(tmp_df), group=robjects.IntVector([2, 1]))
+                    # print(dge_list)
+                    dge_list_ed = edger.estimateDisp(dge_list)
+                    exact_test = edger.exactTest(dge_list_ed, dispersion=bcv ** 2)
+                    exact_test_df = robjects.DataFrame(exact_test[0])
+                    # print(type(exact_test_df))
+                    exact_test_pd_df = pandas2ri.ri2py_dataframe(exact_test_df)
+                    # print(exact_test_pd_df)
+                    fold_change[col_name] = exact_test_pd_df
+
+            # print(fold_change)
+            self.set_fold_change(fold_change)
+            return self.fold_change
+
+        else:
+            print("No control group is specified, please try again, specifying the column name of control file as "
+                  "parameter '-co'")
+
+            # --with raw data--
             # for el in read_counts_edger:
             #     if el != control:
             #         # print(el)
@@ -274,58 +280,79 @@ class TestingBinReadAnalyzer:
             #         # print(exact_test_pd_df)
             #         fold_change[el] = exact_test_pd_df
 
-            # with normalized data
-            for i in range(1, self.norm.ncol + 1):
-                col = self.norm.rx(True, i)
-                col_name = self.norm.colnames[i-1]
-                if col_name != control:
-                    print(col_name)
-                    tmp_dict = {col_name: col, control: self.norm.rx(True, control)}
-                    tmp_df = robjects.DataFrame(tmp_dict)
-                    dge_list = edger.DGEList(robjects.DataFrame(tmp_df), group=robjects.IntVector([2, 1]))
-                    # print(dge_list)
-                    dge_list_ed = edger.estimateDisp(dge_list)
-                    exact_test = edger.exactTest(dge_list_ed, dispersion=bcv**2)
-                    exact_test_df = robjects.DataFrame(exact_test[0])
-                    # print(type(exact_test_df))
-                    exact_test_pd_df = pandas2ri.ri2py_dataframe(exact_test_df)
-                    # print(exact_test_pd_df)
-                    fold_change[col_name] = exact_test_pd_df
-
-                    # print(edger.topTags(exact_test))
-            # print(fold_change)
-            self.set_fold_change(fold_change)
-            return self.fold_change
-
-        else:
-            print("No control group is specified, please try again, specifying the column name of control file as "
-                  "parameter '-co'")
-
-    def get_sig_pos(self):  # , df_counts
+    def get_sig_pos(self, fc, p_value):  # , df_counts, bin_size
         """This method return the chromosome position in terms of basis, of bins
         retained significantly different from the control"""
         fold_change = self.fold_change
-        read_count = self.parameters["read_counts"]
+        read_counts = self.parameters["read_counts"]
         # read_counts = df_counts
-        sig_data = {"clone": [], "bin": [], "chr": [], "genome_position": []}
-
-        print(fold_change)
+        sig_data = {"clone": [], "bin": [], "chr": [], "genome_position": [], "logFC": [], "PValue": []}
+        fig = go.Figure()
         for el in fold_change:
-            sig_fc = fold_change[el][fold_change[el]["logFC"] > 1.5]
-            sig_row_index = sig_fc.index.values
-            for i in range(len(sig_row_index)):
+            sig_fc_values = fold_change[el][fold_change[el]["logFC"] >= fc]
+            sig_fc_neg_values = fold_change[el][fold_change[el]["logFC"] <= -fc]
+            sig_fc = pd.concat([sig_fc_values, sig_fc_neg_values])
+            sig_fc_pvalues = sig_fc[sig_fc["PValue"] <= p_value]
+            for i in sig_fc_pvalues.index.values:
                 sig_data["clone"].append(el)
-                sig_data["bin"].append(read_count["bin"].iloc[sig_row_index[i]])
-                sig_data["chr"].append(read_count["chr"].iloc[sig_row_index[i]])
-                sig_data["genome_position"].append(sig_row_index[i] * self.parameters["bin_size"])
+                sig_data["bin"].append(i)
+                sig_data["chr"].append(read_counts["chr"].iloc[i])
+                sig_data["genome_position"].append(i * self.bin_size)
+                sig_data["logFC"].append(sig_fc_pvalues["logFC"][i])
+                sig_data["PValue"].append(sig_fc_pvalues["PValue"][i])
+
         sig_data_df = pd.DataFrame(sig_data)
-        print(sig_data_df)
-        #     print(sig_fc.index.values)
-        #     print(fc_data)
-        #     if fc_data[fc_data > 1.5]:
-        #         print(fc_data[fc_data["logFC"] > 1.5])
-        # here I have to retrieve information about th position of the bin in the chromosome
-        return sig_data_df
+        self.set_sig_fc(sig_data_df)
+        return self.sig_fc
+
+    def plot_background(self, fig):  # , df_counts
+        read_counts = self.parameters["read_counts"]
+        # read_counts = df_counts
+        coordinates_x = []
+        coordinates_y = []
+        chromosomes = []
+
+        for ch in read_counts["chr"]:
+            if ch[ch.find("c"):] not in chromosomes:
+                chromosomes.append(ch[ch.find("c"):])
+
+        for chrom in chromosomes:
+            single_df = read_counts[read_counts["chr"] == "CH." + chrom]
+            coordinates_x.append(single_df["index"].mean())
+            coordinates_y.append(-2.6)
+            if int(chrom[chrom.find("r") + 1:]) % 2 == 0:
+                fig.add_shape(go.layout.Shape(type="rect",
+                                              xref="x",
+                                              yref="paper",
+                                              x0=single_df["index"].iloc[0],
+                                              y0=0,
+                                              x1=single_df["index"].iloc[-1],
+                                              y1=1,
+                                              fillcolor="rgb(230, 230, 250)",  # lavande
+                                              opacity=0.5,
+                                              layer="below",
+                                              line_width=0))
+            else:
+                fig.add_shape(go.layout.Shape(type="rect",
+                                              xref="x",
+                                              yref="paper",
+                                              x0=single_df["index"].iloc[0],
+                                              y0=0,
+                                              x1=single_df["index"].iloc[-1],
+                                              y1=1,
+                                              fillcolor="rgb(240, 248, 255)",  # ~light_mint_green
+                                              opacity=0.5,
+                                              layer="below",
+                                              line_width=0))
+
+        fig.add_trace(go.Scatter(x=coordinates_x,
+                                 y=coordinates_y,
+                                 text=chromosomes,
+                                 mode="text",
+                                 showlegend=False,
+                                 ))
+
+        return fig
 
     def add_ns_trace(self, fig, reference=None, chrom=None):
         """This method is used in other plotting methods, in order to add the
@@ -362,7 +389,62 @@ class TestingBinReadAnalyzer:
         else:
             print("Sorry, to add this trace to the plot, you have to specify the reference file name\nPlease try again")
 
-    def plot_chrom_sample(self, reference, chrom, sample, ns=False, fig=go.Figure()):
+    def plot_counts_distributions(self, cigar):
+        # --plot_raw_counts_distribution--
+        read_counts = self.parameters["read_counts"]
+        counts_to_plot = []
+        col_labels = []
+
+        fig_all = go.Figure()
+        for col in read_counts.columns:
+            if col != "index" and col != "chr" and col != 'bin':
+                counts_to_plot.append(read_counts[col])
+                col_labels.append(col)
+                fig_all.add_trace(go.Histogram(x=read_counts[col],
+                                               name=col))
+        # fig_all.update_layout(title_text="Cigar Filter - Histogram RAW data - BRAN" + str(bin_size) + " - all samples",
+        #                       barmode="overlay")
+        fig_all.update_layout(title_text="Histogram RAW data - BRAN" + str(self.bin_size) + " - all samples",
+                              barmode="overlay")
+        fig_all.update_xaxes(title_text="Raw_Counts")
+        fig_all.update_yaxes(title_text="Frequency")
+
+        fig_all.update_traces(opacity=0.75)
+
+        # --plot_norm_counts_distribution--
+        fig_all_norm = go.Figure()
+        for i in range(0, self.norm.ncol):
+            fig_all_norm.add_trace(go.Histogram(x=list(self.norm.rx(True, i + 1)),
+                                                name=str(self.norm.colnames[i])))
+        # fig_all_norm.update_layout(title_text="Cigar Filter - Histogram NORMALIZED data - BRAN" + str(bin_size) + " - all samples",
+        #                            barmode="overlay")
+        fig_all_norm.update_layout(title_text="Histogram NORMALIZED data - BRAN" +
+                                              str(self.bin_size) +
+                                              " - all samples",
+                                   barmode="overlay")
+        fig_all_norm.update_xaxes(title_text="Normalized_Counts")
+        fig_all_norm.update_yaxes(title_text="Frequency")
+        fig_all_norm.update_traces(opacity=0.75)
+
+        # --plot_log_scaled_norm_counts_distribution--
+        fig_log_norm = go.Figure()
+        for key in self.fold_change:
+            fig_log_norm.add_trace(go.Histogram(x=self.fold_change[key]["logCPM"],
+                                                name=key))
+
+        fig_log_norm.update_layout(title_text="Histogram LOG-SCALE NORMALIZED data - BRAN" +
+                                              str(self.bin_size) +
+                                              " - all samples",
+                                   barmode="overlay")
+        fig_log_norm.update_xaxes(title_text="Log-scaled_Normalized_Counts")
+        fig_log_norm.update_yaxes(title_text="Frequency")
+        fig_log_norm.update_traces(opacity=0.75)
+
+        fig_all.show()
+        fig_all_norm.show()
+        fig_log_norm.show()
+
+    def plot_chrom_sample(self, reference, chrom, sample, cigar, ns=False, fig=go.Figure()):
         """This method allows to obtain a scatter-plot of raw read_counts
         for a specific chromosome and a specific sample
 
@@ -400,7 +482,7 @@ class TestingBinReadAnalyzer:
 
         fig.show()
 
-    def plot_chromosome(self, reference, chrom, ns=False, fig=go.Figure()):
+    def plot_chromosome(self, reference, chrom, cigar, ns=False, fig=go.Figure()):
         """This method allows to obtain a scatter-plot of raw_read_counts
         of all samples, but for a specific chromosome of interest
 
@@ -465,11 +547,13 @@ class TestingBinReadAnalyzer:
         if ns:
             self.add_ns_trace(fig, reference=reference)
 
+        self.plot_background(fig)
+
         fig.update_layout(title="Read Counts - Clone: " + sample + " - Bin Size: " + str(self.bin_size))
 
         fig.show()
 
-    def plot_all(self, reference, ns=False, fig=go.Figure()):  # df_counts,
+    def plot_all(self, reference, ns=False, fig=go.Figure()):  # df_counts, bin_size
         """This method allows to obtain a scatter-plot of raw_read_counts
         of all chromosomes and all samples
 
@@ -484,14 +568,8 @@ class TestingBinReadAnalyzer:
         """
         read_counts = self.parameters["read_counts"]
         # read_counts = df_counts
-        coordinates_x = []
-        coordinates_y = []
-
-        chromosomes = []
-        fig.update_xaxes(title_text="Chromosomes_Bins")
-        fig.update_yaxes(title_text="Read_Count_Per_Bin")
-
         col_list = list(read_counts.columns)
+
         for i in range(len(col_list)):
             if col_list[i] != "index" and col_list[i] != "chr" and col_list[i] != "bin":
                 fig.add_trace(go.Scatter(x=read_counts["index"],
@@ -499,50 +577,15 @@ class TestingBinReadAnalyzer:
                                          mode="markers",
                                          name=str(col_list[i])))
 
-        for ch in read_counts["chr"]:
-            if ch[ch.find("c"):] not in chromosomes:
-                chromosomes.append(ch[ch.find("c"):])
-
-        for chrom in chromosomes:
-            single_df = read_counts[read_counts["chr"] == "CH." + chrom]
-            coordinates_x.append(single_df["index"].mean())
-            coordinates_y.append(-1)
-            if int(chrom[chrom.find("r") + 1:]) % 2 == 0:
-                fig.add_shape(go.layout.Shape(type="rect",
-                                              xref="x",
-                                              yref="paper",
-                                              x0=single_df["index"].iloc[0],
-                                              y0=0,
-                                              x1=single_df["index"].iloc[-1],
-                                              y1=1,
-                                              fillcolor="rgb(230, 230, 250)",  # lavande
-                                              opacity=0.5,
-                                              layer="below",
-                                              line_width=0))
-            else:
-                fig.add_shape(go.layout.Shape(type="rect",
-                                              xref="x",
-                                              yref="paper",
-                                              x0=single_df["index"].iloc[0],
-                                              y0=0,
-                                              x1=single_df["index"].iloc[-1],
-                                              y1=1,
-                                              fillcolor="rgb(240, 248, 255)",  # ~light_green
-                                              opacity=0.5,
-                                              layer="below",
-                                              line_width=0))
-
-        fig.add_trace(go.Scatter(x=coordinates_x,
-                                 y=coordinates_y,
-                                 text=chromosomes,
-                                 mode="text",
-                                 showlegend=False,
-                                 ))
-
         if ns:
             self.add_ns_trace(fig, reference=reference)
 
+        self.plot_background(fig)
+        # fig.update_layout(title="Read Counts - All Clones - All Chromosomes - Bin Size: " + str(self.bin_size))
+        # fig.update_layout(title="Cigar Filter - Read Counts - All Clones - All Chromosomes - Bin Size: " + str(self.bin_size))
         fig.update_layout(title="Read Counts - All Clones - All Chromosomes - Bin Size: " + str(self.bin_size))
+        fig.update_xaxes(title_text="Chromosomes_Bins")
+        fig.update_yaxes(title_text="Read_Count_Per_Bin")
 
         fig.show()
 
@@ -661,9 +704,11 @@ class TestingBinReadAnalyzer:
                                 " - Chr: all - Bin Size: " +
                                 str(self.bin_size))
 
+        self.plot_background(fig)
+
         fig.show()
 
-    def plot_norm_data_all(self, reference, ns=False, fig=go.Figure()):  # df_counts,
+    def plot_norm_data_all(self, reference, ns=False, fig=go.Figure()):  # df_counts, bin_size
         """This method allows to obtain a scatter-plot of normalized_read_counts
         in all chromosomes and for all samples
 
@@ -678,135 +723,70 @@ class TestingBinReadAnalyzer:
         """
         read_counts = self.parameters["read_counts"]
         # read_counts = df_counts
-        coordinates_x = []
-        coordinates_y = []
-        chromosomes = []
         norm_counts = self.norm
-        fig.update_xaxes(title_text="Chromosomes_Bins")
-        fig.update_yaxes(title_text="Norm_Read_Count_Per_Bin")
+
         for i in range(0, norm_counts.ncol):
             fig.add_trace(go.Scatter(x=read_counts["index"],
                                      y=list(norm_counts.rx(True, i + 1)),
                                      mode="markers",
                                      name=norm_counts.colnames[i]))
-        for ch in read_counts["chr"]:
-            if ch[ch.find("c"):] not in chromosomes:
-                chromosomes.append(ch[ch.find("c"):])
-
-        for chrom in chromosomes:
-            single_df = read_counts[read_counts["chr"] == "CH." + chrom]
-            coordinates_x.append(single_df["index"].mean())
-            coordinates_y.append(-2)
-            if int(chrom[chrom.find("r") + 1:]) % 2 == 0:
-                fig.add_shape(go.layout.Shape(type="rect",
-                                              xref="x",
-                                              yref="paper",
-                                              x0=single_df["index"].iloc[0],
-                                              y0=0,
-                                              x1=single_df["index"].iloc[-1],
-                                              y1=1,
-                                              fillcolor="rgb(230, 230, 250)",
-                                              opacity=0.5,
-                                              layer="below",
-                                              line_width=0))
-            else:
-                fig.add_shape(go.layout.Shape(type="rect",
-                                              xref="x",
-                                              yref="paper",
-                                              x0=single_df["index"].iloc[0],
-                                              y0=0,
-                                              x1=single_df["index"].iloc[-1],
-                                              y1=1,
-                                              fillcolor="rgb(240, 248, 255)",
-                                              opacity=0.5,
-                                              layer="below",
-                                              line_width=0))
-
-        fig.add_trace(go.Scatter(x=coordinates_x,
-                                 y=coordinates_y,
-                                 text=chromosomes,
-                                 mode="text",
-                                 showlegend=False,
-                                 ))
 
         if ns:
             self.add_ns_trace(fig, reference=reference)
 
+        self.plot_background(fig)
         fig.update_layout(title="Normalized Read Counts - Clone: all - Chr: all - Bin Size: " + str(self.bin_size))
+        # fig.update_layout(title="Cigar Filter - Normalized Read Counts - Clone: all - Chr: all - Bin Size: " + str(self.bin_size))
+        # fig.update_layout(title="Normalized Read Counts - Clone: all - Chr: all - Bin Size: " + str(bin_size))
+        fig.update_xaxes(title_text="Chromosomes_Bins")
+        fig.update_yaxes(title_text="Norm_Read_Count_Per_Bin")
 
         fig.show()
 
-    def plot_sig_data(self, df_counts, bs, fig=go.Figure()):  #  df_counts,
-        read_counts = df_counts
-        # read_counts = self.parameters["read_counts"]
+    def plot_sig_data(self, fc):  # , df_counts, bin_size
+        read_counts = self.parameters["read_counts"]
+        # read_counts = df_counts
+
         fold_change = self.fold_change
-        coordinates_x = []
-        coordinates_y = []
-        chromosomes = []
-        bin_size = bs
-        for el in fold_change:
-            fold_change[el]["index"] = read_counts["index"]
-            # threshold = fold_change[el][fold_change[el]["logFC"] > 1.5]
-            # print(threshold)
-            fig.update_xaxes(title_text="Chromosomes_Bins")
-            fig.update_yaxes(title_text="Read_Count_Per_Bin")
-            fig.add_trace(go.Scatter(x=fold_change[el]["index"],
-                                     y=fold_change[el]["logFC"],
+        sig_fc = self.sig_fc
+        fig = go.Figure()
+        for clone in sig_fc.clone.unique():
+            sub_df = sig_fc[sig_fc["clone"] == clone]
+            no_sig_fc = fold_change[clone].drop(list(sub_df["bin"]))
+
+            fig.add_trace(go.Scatter(x=sub_df["bin"],
+                                     y=sub_df["logFC"],
                                      mode="markers",
-                                     name=el))
+                                     name=clone))
 
-            # for every bin with significant difference form the control, plot a dashed-dot line
-            # fig.add_shape(go.layout.Shape(type="line",
-            #                               x0=threshold["index"],
-            #                               y0=threshold["logFC"],
-            #                               x1=threshold["index"],
-            #                               y1=threshold["logFC"] + 10,
-            #                               line=dict(color="black",
-            #                                         width=3,
-            #                                         dash="dashdot")))
+            fig.add_trace(go.Scatter(x=no_sig_fc.index.values,
+                                     y=no_sig_fc["logFC"],
+                                     mode="markers",
+                                     marker=dict(color="rgb(176, 196, 222)"), # silver
+                                     showlegend=False))
 
-        for ch in read_counts["chr"]:
-            if ch[ch.find("c"):] not in chromosomes:
-                chromosomes.append(ch[ch.find("c"):])
+        fig.update_layout(title="Significant Fold Change Counts - Clone: all - Chr: all - Bin Size: " + str(self.bin_size))
+        fig.update_xaxes(title_text="Chromosomes_Bins")
+        fig.update_yaxes(title_text="Fold-Change")
 
-        for chrom in chromosomes:
-            single_df = read_counts[read_counts["chr"] == "CH." + chrom]
-            coordinates_x.append(single_df["index"].mean())
-            coordinates_y.append(-1)
-            if int(chrom[chrom.find("r") + 1:]) % 2 == 0:
-                fig.add_shape(go.layout.Shape(type="rect",
-                                              xref="x",
-                                              yref="paper",
-                                              x0=single_df["index"].iloc[0],
-                                              y0=0,
-                                              x1=single_df["index"].iloc[-1],
-                                              y1=1,
-                                              fillcolor="rgb(230, 230, 250)",
-                                              opacity=0.5,
-                                              layer="below",
-                                              line_width=0))
-            else:
-                fig.add_shape(go.layout.Shape(type="rect",
-                                              xref="x",
-                                              yref="paper",
-                                              x0=single_df["index"].iloc[0],
-                                              y0=0,
-                                              x1=single_df["index"].iloc[-1],
-                                              y1=1,
-                                              fillcolor="rgb(240, 248, 255)",
-                                              opacity=0.5,
-                                              layer="below",
-                                              line_width=0))
+        fig.add_shape(go.layout.Shape(type="line",
+                                      x0=0,
+                                      y0=fc,
+                                      x1=len(read_counts),
+                                      y1=fc))
 
-        fig.add_trace(go.Scatter(x=coordinates_x,
-                                 y=coordinates_y,
-                                 text=chromosomes,
-                                 mode="text",
-                                 showlegend=False,
-                                 ))
+        fig.add_shape(go.layout.Shape(type="line",
+                                      x0=0,
+                                      y0=-fc,
+                                      x1=len(read_counts),
+                                      y1=-fc))
 
-        # fig.update_layout(title="Read Counts - All Clones - All Chromosomes - Bin Size: " + str(self.bin_size))
-        fig.update_layout(title="Read Counts - All Clones - All Chromosomes - Bin Size: " + str(bin_size))
+        fig.update_shapes(dict(xref="x",
+                               yref="y",
+                               line=dict(color="crimson",
+                                         width=1)))
+
+        self.plot_background(fig)
 
         fig.show()
 
@@ -886,6 +866,17 @@ if __name__ == "__main__":
                         help="""An additional parameter to exclude other reads from the count, on the bases of other 
                             information in their cigar, like indels.\n(Specify it like e.g. "I" "D")""")
 
+    parser.add_argument("-fc", "--fold_change",
+                        type=float,
+                        default=1.5,
+                        help="An integer to set the fold-change cut-off")
+
+    parser.add_argument("-p", "--p_value",
+                        type=float,
+                        default=0.05,
+                        help="An integer to set the p-value in order to retain the fold-change value"
+                             "not picked up by chance")
+
     args = parser.parse_args()
     dict_args = vars(parser.parse_args([]))
 
@@ -896,59 +887,76 @@ if __name__ == "__main__":
 
     analyzer = TestingBinReadAnalyzer(args.folder, args.bin_size, args.reference, flags, args.output_pickle)
 
-    analyzer.load_data(other_cigar_filters=args.other_cigar_filters,
-                       cigar_filter=args.cigar_filter,
-                       reference=args.reference,
-                       read_info=args.read_info,
-                       verbose=True)
+    print(analyzer.load_data(other_cigar_filters=args.other_cigar_filters,
+                             cigar_filter=args.cigar_filter,
+                             reference=args.reference,
+                             read_info=args.read_info,
+                             verbose=True))
 
-    # if not os.path.exists("plots"):
-    #     os.mkdir("plots")
     analyzer.normalize_bins()
     analyzer.get_fold_change(args.control_name)
-    analyzer.get_sig_pos()
+    analyzer.get_sig_pos(args.fold_change, args.p_value)
 
-    # if args.chromosome and args.sample:
-    #     if args.Ns_count:
-    #         analyzer.plot_chrom_sample(args.reference, args.chromosome, args.sample, args.Ns_count)
-    #         analyzer.plot_norm_data_chr_sample(args.reference, args.chromosome, args.sample, args.Ns_count)
-    #     else:
-    #         analyzer.plot_chrom_sample(args.reference, args.chromosome, args.sample)
-    #         analyzer.plot_norm_data_chr_sample(args.reference, args.chromosome, args.sample)
-    #
-    # elif args.chromosome:
-    #     if args.Ns_count:
-    #         analyzer.plot_chromosome(args.reference, args.chromosome, args.Ns_count)
-    #         analyzer.plot_norm_data_chr(args.reference, args.chromosome, args.Ns_count)
-    #     else:
-    #         analyzer.plot_chromosome(args.reference, args.chromosome)
-    #         analyzer.plot_norm_data_chr(args.reference, args.chromosome)
-    #
-    # elif args.sample:
-    #     if args.Ns_count:
-    #         analyzer.plot_sample(args.reference, args.sample, args.Ns_count)
-    #         analyzer.plot_norm_data_sample(args.reference, args.sample, args.Ns_count)
-    #     else:
-    #         analyzer.plot_sample(args.reference, args.sample)
-    #         analyzer.plot_norm_data_sample(args.reference, args.sample)
-    #
-    # else:
-    #     if args.Ns_count:
-    #         analyzer.plot_all(args.reference, args.Ns_count)
-    #         analyzer.plot_norm_data_all(args.reference, args.Ns_count)
-    #     else:
-    #         analyzer.plot_all(args.reference)
-    #         analyzer.plot_norm_data_all(args.reference)
-    #         analyzer.plot_sig_data(args.bin_size)
+    # # if not os.path.exists("plots"):
+    # #     os.mkdir("plots")
+
+    # analyzer.plot_counts_distributions()
+    if args.chromosome and args.sample:
+        if args.Ns_count:
+            analyzer.plot_chrom_sample(args.reference, args.chromosome, args.sample, args.Ns_count)
+            analyzer.plot_norm_data_chr_sample(args.reference, args.chromosome, args.sample, args.Ns_count)
+        else:
+            analyzer.plot_chrom_sample(args.reference, args.chromosome, args.sample)
+            analyzer.plot_norm_data_chr_sample(args.reference, args.chromosome, args.sample)
+
+    elif args.chromosome:
+        if args.Ns_count:
+            analyzer.plot_chromosome(args.reference, args.chromosome, args.Ns_count)
+            analyzer.plot_norm_data_chr(args.reference, args.chromosome, args.Ns_count)
+        else:
+            analyzer.plot_chromosome(args.reference, args.chromosome)
+            analyzer.plot_norm_data_chr(args.reference, args.chromosome)
+
+    elif args.sample:
+        if args.Ns_count:
+            analyzer.plot_sample(args.reference, args.sample, args.Ns_count)
+            analyzer.plot_norm_data_sample(args.reference, args.sample, args.Ns_count)
+        else:
+            analyzer.plot_sample(args.reference, args.sample)
+            analyzer.plot_norm_data_sample(args.reference, args.sample)
+
+    else:
+        if args.Ns_count:
+            analyzer.plot_all(args.reference, args.Ns_count)
+            analyzer.plot_norm_data_all(args.reference, args.Ns_count)
+        else:
+            analyzer.plot_all(args.reference)
+            analyzer.plot_norm_data_all(args.reference)
+
+    analyzer.plot_sig_data(args.fold_change)
 
     # ---------------------------complete_file_pickle--------------------------------
-    # with open("/home/giulia/Downloads/BRAN30000_df_c.p", "rb") as input_param:
+    # with open("../all_samples_pickles/BRAN250000_df.p", "rb") as input_param:
     #     param = pickle.load(input_param)
-    #     print(param)
-    #     analyzer.normalize_bins(param["read_counts"])
-    #     analyzer.get_fold_change(param["read_counts"], args.control_name)
-    #     # # analyzer.plot_all(param["read_counts"], args.reference)
-    #     # # analyzer.plot_norm_data_all(param["read_counts"], args.reference)
+    #     chr6 = param["read_counts"][param["read_counts"]["chr"] == "CH.chr6"]
+    #     chr1 = param["read_counts"][param["read_counts"]["chr"] == "CH.chr1"]
+    #     chr19 = param["read_counts"][param["read_counts"]["chr"] == "CH.chr19"]
+    #     chr8 = param["read_counts"][param["read_counts"]["chr"] == "CH.chr8"]
+    #     chr13 = param["read_counts"][param["read_counts"]["chr"] == "CH.chr13"]
+    #
+    #     # print(chr6[["Ch15_3_1_ref_IlluminaPE_aligns_Primary", "bin"]])
+    #     print("all\n", param["read_counts"][["Ch15_3_1_ref_IlluminaPE_aligns_Primary", "Ch15_2_1_ref_IlluminaPE_aligns_Primary"]])
+    #     print("chr6\n", chr6[["Ch15_3_1_ref_IlluminaPE_aligns_Primary", "Ch15_2_1_ref_IlluminaPE_aligns_Primary"]])
+    #     print("chr1\n", chr1[["Ch15_3_1_ref_IlluminaPE_aligns_Primary", "Ch15_2_1_ref_IlluminaPE_aligns_Primary"]])
+    #     print("chr19\n", chr19[["Ch15_3_1_ref_IlluminaPE_aligns_Primary", "Ch15_2_1_ref_IlluminaPE_aligns_Primary"]])
+    #     print("chr8\n", chr8[["Ch15_3_1_ref_IlluminaPE_aligns_Primary", "Ch15_2_1_ref_IlluminaPE_aligns_Primary"]])
+    #     print("chr13\n", chr13[["Ch15_3_1_ref_IlluminaPE_aligns_Primary", "Ch15_2_1_ref_IlluminaPE_aligns_Primary"]])
+    #
+    #     analyzer.normalize_bins(param["read_counts"], param["bin_size"])
+    #     analyzer.get_fold_change(param["read_counts"], param["bin_size"], args.control_name)
+    #     # analyzer.plot_all(param["read_counts"], param["bin_size"], args.reference)
+    #     analyzer.plot_norm_data_all(param["read_counts"], param["bin_size"], args.reference)
+    #     analyzer.get_sig_pos(param["read_counts"], param["bin_size"])
     #     analyzer.plot_sig_data(param["read_counts"], param["bin_size"])
-    #     # # analyzer.get_sig_pos(param["read_counts"])
+        # analyzer.plot_background(param["read_counts"])
     # ------------------------------------------------------------------------------

@@ -124,7 +124,7 @@ class TestingBinReadCounter:
     #     self.read_counts = read_counts
 
     def pickle_file_name(self, other_cigar_filters, cigar_filter=False, reference=False, read_info=False):
-        # pickle name is a combination of the various parameters:
+        # pickle name is a combination of the various parameters' name:
         # BRAN +
         # bin_size +
         # df (if the param is the standard flag list)/ mf otherwise +
@@ -212,11 +212,7 @@ class TestingBinReadCounter:
                                     if not any(clip in read.cigarstring for clip in cigar_clip) and \
                                             not any(el in read.cigarstring for el in other_cigar_filters) and \
                                             str(read.flag) in self.flags:
-                                        bit_flag = bin(int(read.flag))  # binary format more easy to check
-                                        if bit_flag[-4] == "1":
-                                            read_pos = int(read.reference_start) + len(read.query_sequence) - 1
-                                        else:
-                                            read_pos = int(read.reference_start)
+                                        read_pos = int(read.reference_start)
                                         # Place the read in the right bin
                                         #
                                         # Dividing the read position for the length of the bin, the exact bin in
@@ -234,11 +230,7 @@ class TestingBinReadCounter:
                                     # if "S" not in read.cigarstring and "H" not in read.cigarstring:
                                     if not any(clip in read.cigarstring for clip in cigar_clip):
                                         if str(read.flag) in self.flags:
-                                            bit_flag = bin(int(read.flag))  # binary format more easy to check
-                                            if bit_flag[-4] == "1":
-                                                read_pos = int(read.reference_start) + len(read.query_sequence) - 1
-                                            else:
-                                                read_pos = int(read.reference_start)
+                                            read_pos = int(read.reference_start)
                                             # Place the read in the right bin
                                             #
                                             # Dividing the read position for the length of the bin, the exact bin in
@@ -291,7 +283,7 @@ class TestingBinReadCounter:
         bin_column = {}
         read_counts = {}
         read_counts_concat = {}
-        count_none = 0
+        count_bin = []
 
         dir_list = os.listdir(self.folder)
         for el in dir_list:
@@ -303,6 +295,7 @@ class TestingBinReadCounter:
                 print("\n" + el)
                 bar_reads = progressbar.ProgressBar(max_value=progressbar.UnknownLength)
                 up = 0
+
                 header = samfile.header["SQ"]
                 clone = el[:el.find(".")]  # name of sample = columns
                 read_counts[clone] = []
@@ -316,8 +309,9 @@ class TestingBinReadCounter:
                     # a list of univocal chromosome names is created
                     if chr_name not in list_chrom:
                         list_chrom.append(chr_name)
-
-                    bins = chr_length // self.bin_size + 1  # number of bin in each chromosome
+                    # print(chr_length)
+                    bins = chr_length // self.bin_size + 1 # number of bin in each chromosome
+                    count_bin.append(bins)
                     read_counts[clone].append([0] * bins)
 
                     for i in range(bins):
@@ -333,13 +327,10 @@ class TestingBinReadCounter:
                         # progress bar updating
                         up += 1
                         bar_reads.update(up)
+                        bit_flag = bin(int(read.flag))  # binary format more easy to check
 
                         if str(read.flag) in self.flags:
-                            bit_flag = bin(int(read.flag))  # binary format more easy to check
-                            if bit_flag[-4] == "1":
-                                read_pos = int(read.reference_start) + len(read.query_sequence) - 1
-                            else:
-                                read_pos = int(read.reference_start)
+                            read_pos = int(read.reference_start)
                             # Place the read in the right bin
                             #
                             # Dividing the read position for the length of the bin, the exact bin in
@@ -358,7 +349,8 @@ class TestingBinReadCounter:
                     read_counts_concat[clone] += counts
 
                 samfile.close()
-
+        # print(count_bin)
+        # print(read_counts)
         for j in range(len(bin_column[list(bin_column.keys())[0]])):
             index_column.append(j)
         # preparing for final DataFrame concatenation
@@ -371,6 +363,31 @@ class TestingBinReadCounter:
         # self.set_read_counts(read_count_df)
         # return self.read_counts
         return read_count_df
+
+    def _load_unmapped_reads(self, other_cigar_filters, cigar=False, reference=False, read_info=False):
+        """"""
+        # -3 because in the order of bitwise FLAGS, the bit for that identify
+        # the unmapped reads is the third; transforming the FLAG into binary
+        # number, the order is respected starting from the write going
+        # to the left
+        dir_list = os.listdir(self.folder)
+        unmapped_count = {}
+        pickle_name = self.pickle_file_name(other_cigar_filters, cigar, reference, read_info)
+        with open("unmapped_" + pickle_name[:pickle_name.find(".p")] + ".txt", "w") as unmapped:
+            for el in dir_list:
+                if el.endswith(".bam"):
+                    clone = el[:el.find(".bam")]
+                    unmapped_count[clone] = 0
+                    bamfile = pysam.AlignmentFile(self.folder + el, "rb")
+                    for read in bamfile.fetch():
+                        bit_flag = bin(int(read.flag))
+                        if bit_flag[-3] == "1":
+                            unmapped_count[clone] += 1
+                            unmapped.write(str(read)+"\n")
+
+            unmapped.write(str(unmapped_count))
+        return unmapped_count
+
 
     def _load_Ns(self):
         """Gives a data structure that store information about the number
@@ -490,6 +507,7 @@ class TestingBinReadCounter:
                         "cigar_filt": None,
                         "other_cigar_filt": [],
                         "read_counts": None,
+                        "unmapped_reads": None,
                         "ref": None,
                         "n_counts": None,
                         "info": None,
@@ -504,12 +522,14 @@ class TestingBinReadCounter:
                 out_data["read_id_info"] = self._load_read_ID()
 
             if cigar and other_cigar_filters:
-                out_data["cigar_filt"] = True
-                out_data["other_cigar_filt"] = True
-                out_data["read_counts"] = self._load_cigar_read_counts(other_cigar_filters, cigar)
+                    out_data["cigar_filt"] = True
+                    out_data["other_cigar_filt"] = True
+                    out_data["read_counts"] = self._load_cigar_read_counts(other_cigar_filters, cigar)
+
             elif cigar:
                 out_data["cigar_filt"] = True
                 out_data["read_counts"] = self._load_cigar_read_counts(other_cigar_filters, cigar)
+
             else:
                 out_data["read_counts"] = self._load_reads()
 
@@ -596,12 +616,12 @@ if __name__ == "__main__":
 
     counter = TestingBinReadCounter(args.folder, args.bin_size, flags, args.reference, args.output_pickle)
 
-    # if args.cigar:
-    #     print(counter._load_cigar_read_counts(args.other_cigar_filters, args.cigar))
+    # if args.cigar_filter:
+    #     print(counter._load_cigar_read_counts(args.other_cigar_filters, args.cigar_filter))
     # else:
     #     print(counter._load_reads())
-
-    counter._export_pickle(args.other_cigar_filters, args.cigar_filter, args.reference, args.read_info)
+    counter._load_unmapped_reads(args.other_cigar_filters, args.cigar_filter, args.reference, args.read_info)
+    # counter._export_pickle(args.other_cigar_filters, args.cigar_filter, args.reference, args.read_info)
     # print(counter.stats())
     # if args.reference and args.read_info:
     #     counter._export_pickle(reference=True, read_info=True)
