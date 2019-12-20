@@ -241,13 +241,14 @@ class TestingBinReadAnalyzer:
                     # print(dge_list)
                     dge_list_ed = edger.estimateDisp(dge_list)
                     exact_test = edger.exactTest(dge_list_ed, dispersion=bcv ** 2)
+                    # print(edger.topTags(exact_test))
                     exact_test_df = robjects.DataFrame(exact_test[0])
                     # print(type(exact_test_df))
                     exact_test_pd_df = pandas2ri.ri2py_dataframe(exact_test_df)
                     # print(exact_test_pd_df)
                     fold_change[col_name] = exact_test_pd_df
 
-            # print(fold_change)
+            print(fold_change)
             self.set_fold_change(fold_change)
             return self.fold_change
 
@@ -298,6 +299,7 @@ class TestingBinReadAnalyzer:
 
         sig_data_df = pd.DataFrame(sig_data)
         self.set_sig_fc(sig_data_df)
+        print(sig_fc)
         return self.sig_fc
 
     def plot_background(self, fig):  # , df_counts
@@ -391,32 +393,38 @@ class TestingBinReadAnalyzer:
 
         # --plot_raw_counts_distribution--
         fig_all = go.Figure()
+        fig_all.update_xaxes(title_text="Raw_Counts")
+        fig_all.update_yaxes(title_text="Frequency")
+
         for col in read_counts.columns:
             if col != "index" and col != "chr" and col != 'bin':
                 counts_to_plot.append(read_counts[col])
                 col_labels.append(col)
                 fig_all.add_trace(go.Histogram(x=read_counts[col],
                                                name=col))
-        fig_all.update_xaxes(title_text="Raw_Counts")
-        fig_all.update_yaxes(title_text="Frequency")
 
         # --plot_norm_counts_distribution--
+
         fig_all_norm = go.Figure()
+        fig_all_norm.update_traces(opacity=0.75)
+        fig_all_norm.update_xaxes(title_text="Normalized_Counts")
+        fig_all_norm.update_yaxes(title_text="Frequency")
+
         for i in range(0, self.norm.ncol):
             fig_all_norm.add_trace(go.Histogram(x=list(self.norm.rx(True, i + 1)),
                                                 name=str(self.norm.colnames[i])))
 
-        fig_all_norm.update_xaxes(title_text="Normalized_Counts")
-        fig_all_norm.update_yaxes(title_text="Frequency")
+
 
         # --plot_log_scaled_norm_counts_distribution--
         fig_log_norm = go.Figure()
+        fig_log_norm.update_xaxes(title_text="Log-scaled_Normalized_Counts")
+        fig_log_norm.update_yaxes(title_text="Frequency")
+
         for key in self.fold_change:
             fig_log_norm.add_trace(go.Histogram(x=self.fold_change[key]["logCPM"],
                                                 name=key))
 
-        fig_log_norm.update_xaxes(title_text="Log-scaled_Normalized_Counts")
-        fig_log_norm.update_yaxes(title_text="Frequency")
 
         # --Titles--
         if cigar:
@@ -450,7 +458,6 @@ class TestingBinReadAnalyzer:
                                        legend_orientation="h",
                                        barmode="overlay")
 
-        fig_all_norm.update_traces(opacity=0.75)
 
         fig_all.show()
         fig_all_norm.show()
