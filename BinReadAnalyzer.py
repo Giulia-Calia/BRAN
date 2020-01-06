@@ -2,12 +2,12 @@
 #
 # This class aims to analyze the data structure created with the imported
 # class: BinReadCounter
-# One can consider this class as the very effector of the analysis on the
-# genome of the plant of interest. For analysis is intended, first of all,
+# One can consider this class as the very effector of analyses on plant of
+# interest' genome. For analysis is intended, first of all,
 # the normalization of the raw_read_counts and than the detection of
-# statistically significant difference in terms of number of reads in bin,
-# that could lead to the identification of part of chromosome or even an
-# entire chromosome that have a significantly different count of reads;
+# significant differences in terms of number of reads per bin, against
+# reference genome; this could lead to the identification of part of chromosome
+# or even an entire chromosome that have a significantly different count of reads;
 # proving that something in that region or chromosome is happened.
 #
 # The script first checks if already exist, in the folder of interest, a
@@ -19,7 +19,7 @@
 # new pickle file
 #
 # After that, on the basis of the parameters given by the user, visualization
-# plots are build up and shows in an as an interactive way via a web page;
+# plots are build up and shows as an interactive way via a web page;
 # also an offline version of all the plots is saved in an appropriate folder
 
 import os
@@ -44,11 +44,14 @@ class BinReadAnalyzer:
     BinReadCounter class; here imported.
 
     Options:
+    -   plot counts distributions, normalized and log scaled
     -   plot read_counts for all chromosomes, for a specific one or for
         a specific sample
     -   normalize read_counts
     -   plot normalized_read_counts for all chromosomes, for a specific
         one or for a specific sample
+    -   fold-change calculation
+    -   plot of significant values in fold-change
 
     Attributes:
             bam_folder_path: the folder in which the necessary files are stored
@@ -89,8 +92,8 @@ class BinReadAnalyzer:
         """set the data structure of significat differences in counts"""
         self.sig_fc = fc
 
-    def load_data(self, other_cigar_filters, cigar_filter=None, reference=None, read_info=None, unmapped=None, verbose=False):
-
+    def load_data(self, other_cigar_filters, cigar_filter=None, reference=None,
+                  read_info=None, unmapped=None, verbose=False):
         """If the pickle file is already present in the folder and the parameters
         are not changed, the data structures were kept, otherwise it runs the
         methods _export_pickle() and load_data() of the imported class BinReadCounter
@@ -99,16 +102,17 @@ class BinReadAnalyzer:
 
         Args:
             other_cigar_filters (list): list of default filters + the optional ones
-            cigar_filter (bool): if specified, the default filters are applied
+            cigar_filter (bool): if specified = True, the default filters are applied
             reference (bool): true if the reference is necessary
             read_info (bool): true if read info are necessary
+            unmapped (bool): if specified != None, counts for unmapped reads are calculated
+                            together with a file containing all unmapped reads
             verbose (bool): default is False, but if set to True, it allows to print
                             and see if a pickle file is already present or if the
                             Analyzer is running to create a new one
 
-
         Returns:
-            A list of parameters and data structures from the pickle file or form the BinReadCounter;
+            A list of parameters and data structures from the pickle file or from the BinReadCounter;
         """
         counter = BinReadCounter(self.folder, self.bin_size, self.flags, self.ref, self.out)
         found = None
@@ -151,9 +155,8 @@ class BinReadAnalyzer:
             print("Warning:\nException occurred - other processes running at this moment: ", i)
 
         if not found:
-            # a file pickle is not p
-            # resent at all in the directory thus the algorithm uses the modules of the
-            # BinReadCounter to calculate the new data structures and it saves a new pickle file
+            # a file pickle is not present at all in the directory thus the algorithm
+            # uses the modules of the BinReadCounter to calculate the new data structures and it saves a new pickle file
             if verbose:
                 print("Parameters are changed or no pickle file exists",
                       "\nBinReadCounter is running with actual parameters",
@@ -318,6 +321,28 @@ class BinReadAnalyzer:
 
         return fig
 
+    def add_threshold_fc(self, fig, fc):
+        read_counts = self.parameters["read_counts"]
+
+        fig.add_shape(go.layout.Shape(type="line",
+                                      x0=0,
+                                      y0=fc,
+                                      x1=len(read_counts),
+                                      y1=fc))
+
+        fig.add_shape(go.layout.Shape(type="line",
+                                      x0=0,
+                                      y0=-fc,
+                                      x1=len(read_counts),
+                                      y1=-fc))
+
+        fig.update_shapes(dict(xref="x",
+                               yref="y",
+                               line=dict(color="crimson",  # dark red
+                                         width=1)))
+
+        return fig
+
     def add_ns_trace(self, fig, reference=None, chrom=None):
         """This method is used in other plotting methods, in order to add the
         representation of N bases in the same plot
@@ -456,11 +481,14 @@ class BinReadAnalyzer:
             A scatter-plot of counts
         """
         read_counts = self.parameters["read_counts"]
-
+        c_name = None
+        for c in list(read_counts["chr"]):
+            if chrom in c:
+                c_name = c
         fig.update_xaxes(title_text="Chromosomes_Bins")
         fig.update_yaxes(title_text="Read_Count_Per_Bin")
 
-        single_chrom = read_counts[read_counts["chr"] == "CH.chr" + str(chrom)]
+        single_chrom = read_counts[read_counts["chr"] == c_name]
         col_list = list(single_chrom.columns)
         for i in range(len(col_list[:col_list.index(sample)]) + 1):
             if col_list[i] == sample:
@@ -504,11 +532,15 @@ class BinReadAnalyzer:
             A scatter-plot of counts
         """
         read_counts = self.parameters["read_counts"]
+        c_name = None
+        for c in list(read_counts["chr"]):
+            if chrom in c:
+                c_name = c
 
         fig.update_xaxes(title_text="Chromosomes_Bins")
         fig.update_yaxes(title_text="Read_Count_Per_Bin")
 
-        single_chrom = read_counts[read_counts["chr"] == "CH.chr" + str(chrom)]
+        single_chrom = read_counts[read_counts["chr"] == c_name]
         col_list = list(single_chrom.columns)
         for i in range(len(col_list)):
             if col_list[i] != "index" and col_list[i] != "chr" and col_list[i] != "bin":
@@ -645,11 +677,16 @@ class BinReadAnalyzer:
         """
         read_counts = self.parameters["read_counts"]
         norm_counts = self.norm
+        c_name = None
+
+        for c in list(read_counts["chr"]):
+            if chrom in c:
+                c_name = c
 
         fig.update_xaxes(title_text="Chromosomes_Bins")
         fig.update_yaxes(title_text="Norm_Read_Count_Per_Bin")
 
-        single_chrom = read_counts[read_counts["chr"] == "CH.chr" + str(chrom)]
+        single_chrom = read_counts[read_counts["chr"] == c_name]
         for i in range(0, norm_counts.ncol):
             if norm_counts.colnames[i] == sample:
                 fig.add_trace(go.Scatter(x=single_chrom["index"],
@@ -700,11 +737,15 @@ class BinReadAnalyzer:
         """
         read_counts = self.parameters["read_counts"]
         norm_counts = self.norm
+        c_name = None
+        for c in list(read_counts["chr"]):
+            if str(chrom) in c:
+                c_name = c
 
         fig.update_xaxes(title_text="Chromosomes_Bins")
         fig.update_yaxes(title_text="Norm_Read_Count_Per_Bin")
 
-        single_chrom = read_counts[read_counts["chr"] == "CH.chr" + str(chrom)]
+        single_chrom = read_counts[read_counts["chr"] == c_name]
         for i in range(0, norm_counts.ncol):
             fig.add_trace(go.Scatter(x=single_chrom["index"],
                                      y=list(norm_counts.rx(True, i + 1)[single_chrom["index"].iloc[0]:
@@ -834,7 +875,7 @@ class BinReadAnalyzer:
                                    width=1280,
                                    height=1024)
 
-    def plot_sig_data(self, saving_folder, fc, cigar):  # , df_counts, bin_size
+    def plot_sig_data_chr_sample(self, saving_folder, fc, p_val, cigar, chrom, sample):
         read_counts = self.parameters["read_counts"]
         # read_counts = df_counts
 
@@ -860,38 +901,79 @@ class BinReadAnalyzer:
                                      marker=dict(color="rgb(176, 196, 222)"),  # silver
                                      showlegend=False))
 
-        fig.add_shape(go.layout.Shape(type="line",
-                                      x0=0,
-                                      y0=fc,
-                                      x1=len(read_counts),
-                                      y1=fc))
-
-        fig.add_shape(go.layout.Shape(type="line",
-                                      x0=0,
-                                      y0=-fc,
-                                      x1=len(read_counts),
-                                      y1=-fc))
-
-        fig.update_shapes(dict(xref="x",
-                               yref="y",
-                               line=dict(color="crimson",
-                                         width=1)))
+        self.add_threshold_fc(fig, fc)
 
         self.plot_background(fig)
 
         if cigar:
             fig.update_layout(title="Cigar Filter - Significant Fold Change Counts - Clone: all - Chr: all - "
-                                    "Bin Size: " + str(self.bin_size),
+                                    "Bin Size: " + str(self.bin_size) + " fc_threshold: " + str(fc) + " p_value: " +
+                                    str(p_val),
                               legend_orientation="h")
         else:
             fig.update_layout(title="Significant Fold Change Counts - Clone: all - Chr: all - "
-                                    "Bin Size: " + str(self.bin_size),
+                                    "Bin Size: " + str(self.bin_size) + " fc_threshold: " + str(fc) + " p_value: " +
+                                    str(p_val),
                               legend_orientation="h")
 
         fig.show()
         save_fig = fig.write_image(saving_folder + "counts_fold_change" + str(self.bin_size) + ".pdf",
                                    width=1280,
                                    height=1024)
+        pass
+
+    def plot_sig_data_chr(self):
+        pass
+
+    def plot_sig_data_sample(self):
+        pass
+
+    def plot_sig_data(self, saving_folder, fc, p_val, cigar):  # , df_counts, bin_size
+        read_counts = self.parameters["read_counts"]
+        # read_counts = df_counts
+
+        fold_change = self.fold_change
+        sig_fc = self.sig_fc
+        fig = go.Figure()
+
+        fig.update_xaxes(title_text="Chromosomes_Bins")
+        fig.update_yaxes(title_text="Fold-Change")
+
+        for clone in sig_fc.clone.unique():
+            sub_df = sig_fc[sig_fc["clone"] == clone]
+            no_sig_fc = fold_change[clone].drop(list(sub_df["bin"]))
+
+            fig.add_trace(go.Scatter(x=sub_df["bin"],
+                                     y=sub_df["logFC"],
+                                     mode="markers",
+                                     name=clone))
+
+            fig.add_trace(go.Scatter(x=no_sig_fc.index.values,
+                                     y=no_sig_fc["logFC"],
+                                     mode="markers",
+                                     marker=dict(color="rgb(176, 196, 222)"),  # silver
+                                     showlegend=False))
+
+        self.add_threshold_fc(fig, fc)
+
+        self.plot_background(fig)
+
+        if cigar:
+            fig.update_layout(title="Cigar Filter - Significant Fold Change Counts - Clone: all - Chr: all - "
+                                    "Bin Size: " + str(self.bin_size) + " fc_threshold: " + str(fc) + " p_value: " +
+                                    str(p_val),
+                              legend_orientation="h")
+        else:
+            fig.update_layout(title="Significant Fold Change Counts - Clone: all - Chr: all - "
+                                    "Bin Size: " + str(self.bin_size) + " fc_threshold: " + str(fc) + " p_value: " +
+                                    str(p_val),
+                              legend_orientation="h")
+
+        fig.show()
+        save_fig = fig.write_image(saving_folder + "counts_fold_change" + str(self.bin_size) + ".pdf",
+                                   width=1280,
+                                   height=1024)
+
 
 if __name__ == "__main__":
 
@@ -1037,4 +1119,4 @@ if __name__ == "__main__":
         analyzer.plot_all(args.saving_folder, args.reference, args.cigar_filter, args.Ns_count)
         analyzer.plot_norm_data_all(args.saving_folder, args.reference, args.cigar_filter, args.Ns_count)
 
-    analyzer.plot_sig_data(args.saving_folder, args.fold_change, args.cigar_filter)
+    analyzer.plot_sig_data(args.saving_folder, args.fold_change, args.p_value, args.cigar_filter)

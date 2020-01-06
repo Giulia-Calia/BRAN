@@ -413,9 +413,10 @@ class BinReadCounter:
                                 unmapped_count[clone] += 1
                                 unmapped.write(str(read) + "\n")
 
+                            clip_filt = ["S", "H"] #----------------------------------------------------------------------------------------------------------------
                             if cigar and read.cigarstring is not None:
                                 # if "S" not in read.cigarstring and "H" not in read.cigarstring
-                                if not any(clip in read.cigarstring for clip in cigar):
+                                if not any(clip in read.cigarstring for clip in clip_filt):
                                     if str(read.flag) in self.flags:
                                         read_pos = int(read.reference_start)
                                         # Place the read in the right bin
@@ -432,7 +433,7 @@ class BinReadCounter:
                                         continue
 
                             elif cigar and other_cigar_filters and read.cigarstring is not None:
-                                if not any(clip in read.cigarstring for clip in cigar) and \
+                                if not any(clip in read.cigarstring for clip in clip_filt) and \
                                         not any(el in read.cigarstring for el in other_cigar_filters) and \
                                         str(read.flag) in self.flags:
                                     read_pos = int(read.reference_start)

@@ -283,12 +283,12 @@ class TestingBinReadAnalyzer:
         read_counts = self.parameters["read_counts"]
         # read_counts = df_counts
         sig_data = {"clone": [], "bin": [], "chr": [], "genome_position": [], "logFC": [], "PValue": []}
-        fig = go.Figure()
         for el in fold_change:
             sig_fc_values = fold_change[el][fold_change[el]["logFC"] >= fc]
             sig_fc_neg_values = fold_change[el][fold_change[el]["logFC"] <= -fc]
             sig_fc = pd.concat([sig_fc_values, sig_fc_neg_values])
             sig_fc_pvalues = sig_fc[sig_fc["PValue"] <= p_value]
+
             for i in sig_fc_pvalues.index.values:
                 sig_data["clone"].append(el)
                 sig_data["bin"].append(i)
@@ -299,8 +299,17 @@ class TestingBinReadAnalyzer:
 
         sig_data_df = pd.DataFrame(sig_data)
         self.set_sig_fc(sig_data_df)
-        print(sig_fc)
+        # print(sig_fc)
         return self.sig_fc
+
+    def get_no_sig_pos(self, fc, pvalue):
+        fold_change = self.fold_change
+        read_counts = self.parameters["read_counts"]
+        no_sig_data = {"clone": [], "bin": [], "chr": [], "genome_position": [], "logFC": [], "PValue": []}
+
+        for el in fold_change:
+
+
 
     def plot_background(self, fig):  # , df_counts
         read_counts = self.parameters["read_counts"]
@@ -348,6 +357,28 @@ class TestingBinReadAnalyzer:
                                  mode="text",
                                  showlegend=False,
                                  ))
+
+        return fig
+
+    def add_threshold_fc(self, fig, fc):
+        read_counts = self.parameters["read_counts"]
+
+        fig.add_shape(go.layout.Shape(type="line",
+                                      x0=0,
+                                      y0=fc,
+                                      x1=len(read_counts),
+                                      y1=fc))
+
+        fig.add_shape(go.layout.Shape(type="line",
+                                      x0=0,
+                                      y0=-fc,
+                                      x1=len(read_counts),
+                                      y1=-fc))
+
+        fig.update_shapes(dict(xref="x",
+                               yref="y",
+                               line=dict(color="crimson",  # dark red
+                                         width=1)))
 
         return fig
 
@@ -865,6 +896,69 @@ class TestingBinReadAnalyzer:
                                    width=1280,
                                    height=1024)
 
+    def plot_sig_data_chr_sample(self, saving_folder, fc, p_val, cigar, chrom, sample):
+        read_counts = self.parameters["read_counts"]
+        # read_counts = df_counts
+        c_name = None
+        fold_change = self.fold_change
+        sig_fc = self.sig_fc
+        fig = go.Figure()
+
+        fig.update_xaxes(title_text="Chromosomes_Bins")
+        fig.update_yaxes(title_text="Fold-Change")
+
+        for c in list(read_counts["chr"]):
+            if c.endswith("chr" + chrom):
+                c_name = c
+
+        # print(sample)
+        # print(sig_fc.clone.unique())
+        if sample in sig_fc.clone.unique():
+            sub_df = sig_fc[sig_fc["clone"] == sample]  # significant data
+            # print(sub_df)
+            sub_df_chr = sub_df[sub_df["chr"] == c_name]
+            # print(sub_df_chr)
+            no_sig_fc = fold_change[sample].drop(list(sub_df["bin"]))  # not significant data
+            print(no_sig_fc)
+            no_sig_chr = no_sig_fc[no_sig_fc["chr"] == c_name]
+
+            # fig.add_trace(go.Scatter(x=sub_df_chr["bin"],
+            #                          y=sub_df_chr["logFC"],
+            #                          mode="markers",
+            #                          name=sample))
+            #
+            # fig.add_trace(go.Scatter(x=no_sig_chr.index.values,
+            #                          y=no_sig_chr["logFC"],
+            #                          mode="markers",
+            #                          marker=dict(color="rgb(176, 196, 222)"),  # silver
+            #                          showlegend=False))
+
+        # self.add_threshold_fc(fig, fc)
+        #
+        # self.plot_background(fig)
+
+        # if cigar:
+        #     fig.update_layout(title="Cigar Filter - Significant Fold Change Counts - Clone: all - Chr: all - "
+        #                             "Bin Size: " + str(self.bin_size) + " fc_threshold: " + str(fc) + " p_value: " +
+        #                             str(p_val),
+        #                       legend_orientation="h")
+        # else:
+        #     fig.update_layout(title="Significant Fold Change Counts - Clone: all - Chr: all - "
+        #                             "Bin Size: " + str(self.bin_size) + " fc_threshold: " + str(fc) + " p_value: " +
+        #                             str(p_val),
+        #                       legend_orientation="h")
+        #
+        # fig.show()
+        # save_fig = fig.write_image(saving_folder + "counts_fold_change" + str(self.bin_size) + ".pdf",
+        #                            width=1280,
+        #                            height=1024)
+
+    def plot_sig_data_chr(self):
+        pass
+
+    def plot_sig_data_sample(self):
+        pass
+
     def plot_sig_data(self, saving_folder, fc, cigar):  # , df_counts, bin_size
         read_counts = self.parameters["read_counts"]
         # read_counts = df_counts
@@ -891,23 +985,24 @@ class TestingBinReadAnalyzer:
                                      marker=dict(color="rgb(176, 196, 222)"), # silver
                                      showlegend=False))
 
-        fig.add_shape(go.layout.Shape(type="line",
-                                      x0=0,
-                                      y0=fc,
-                                      x1=len(read_counts),
-                                      y1=fc))
+        # fig.add_shape(go.layout.Shape(type="line",
+        #                               x0=0,
+        #                               y0=fc,
+        #                               x1=len(read_counts),
+        #                               y1=fc))
+        #
+        # fig.add_shape(go.layout.Shape(type="line",
+        #                               x0=0,
+        #                               y0=-fc,
+        #                               x1=len(read_counts),
+        #                               y1=-fc))
+        #
+        # fig.update_shapes(dict(xref="x",
+        #                        yref="y",
+        #                        line=dict(color="crimson",
+        #                                  width=1)))
 
-        fig.add_shape(go.layout.Shape(type="line",
-                                      x0=0,
-                                      y0=-fc,
-                                      x1=len(read_counts),
-                                      y1=-fc))
-
-        fig.update_shapes(dict(xref="x",
-                               yref="y",
-                               line=dict(color="crimson",
-                                         width=1)))
-
+        self.add_threshold_fc(fig, fc)
         self.plot_background(fig)
 
         if cigar:
@@ -967,7 +1062,7 @@ if __name__ == "__main__":
 
     parser.add_argument("-ch", "--chromosome",
                         default=None,
-                        type=int,
+                        type=str,
                         help="""The number of the chromosome of interest for the plot of counts""")
 
     parser.add_argument("-s", "--sample",
@@ -1041,31 +1136,33 @@ if __name__ == "__main__":
 
     analyzer.normalize_bins()
     analyzer.get_fold_change(args.control_name)
-    analyzer.get_sig_pos(args.fold_change, args.p_value)
+    # analyzer.get_sig_pos(args.fold_change, args.p_value)
+    analyzer.get_no_sig_pos(args.fold_change, args.p_value)
 
     if not os.path.exists(args.saving_folder):
         os.mkdir(args.saving_folder)
 
-    analyzer.plot_counts_distributions(args.saving_folder, args.cigar_filter)
-
-    if args.chromosome and args.sample:
-        analyzer.plot_chrom_sample(args.saving_folder, args.reference, args.chromosome, args.sample, args.cigar_filter, args.Ns_count)
-        analyzer.plot_norm_data_chr_sample(args.saving_folder, args.reference, args.chromosome, args.sample, args.cigar_filter,
-                                           args.Ns_count)
-
-    elif args.chromosome:
-        analyzer.plot_chromosome(args.saving_folder, args.reference, args.chromosome, args.cigar_filter, args.Ns_count)
-        analyzer.plot_norm_data_chr(args.saving_folder, args.reference, args.chromosome, args.cigar_filter, args.Ns_count)
-
-    elif args.sample:
-        analyzer.plot_sample(args.saving_folder, args.reference, args.sample, args.cigar_filter, args.Ns_count)
-        analyzer.plot_norm_data_sample(args.saving_folder, args.reference, args.sample, args.cigar_filter, args.Ns_count)
-
-    else:
-        analyzer.plot_all(args.saving_folder, args.reference, args.cigar_filter, args.Ns_count)
-        analyzer.plot_norm_data_all(args.saving_folder, args.reference, args.cigar_filter, args.Ns_count)
-
-    analyzer.plot_sig_data(args.saving_folder, args.fold_change, args.cigar_filter)
+    # analyzer.plot_counts_distributions(args.saving_folder, args.cigar_filter)
+    #
+    # if args.chromosome and args.sample:
+    #     analyzer.plot_chrom_sample(args.saving_folder, args.reference, args.chromosome, args.sample, args.cigar_filter, args.Ns_count)
+    #     analyzer.plot_norm_data_chr_sample(args.saving_folder, args.reference, args.chromosome, args.sample, args.cigar_filter,
+    #                                        args.Ns_count)
+    #
+    # elif args.chromosome:
+    #     analyzer.plot_chromosome(args.saving_folder, args.reference, args.chromosome, args.cigar_filter, args.Ns_count)
+    #     analyzer.plot_norm_data_chr(args.saving_folder, args.reference, args.chromosome, args.cigar_filter, args.Ns_count)
+    #
+    # elif args.sample:
+    #     analyzer.plot_sample(args.saving_folder, args.reference, args.sample, args.cigar_filter, args.Ns_count)
+    #     analyzer.plot_norm_data_sample(args.saving_folder, args.reference, args.sample, args.cigar_filter, args.Ns_count)
+    #
+    # else:
+    #     analyzer.plot_all(args.saving_folder, args.reference, args.cigar_filter, args.Ns_count)
+    #     analyzer.plot_norm_data_all(args.saving_folder, args.reference, args.cigar_filter, args.Ns_count)
+    #
+    # analyzer.plot_sig_data(args.saving_folder, args.fold_change, args.p_value, args.cigar_filter)
+    analyzer.plot_sig_data_chr_sample(args.saving_folder, args.fold_change, args.p_value, args.cigar_filter, args.chromosome, args.sample)
 
 
     # ---------------------------complete_file_pickle--------------------------------
