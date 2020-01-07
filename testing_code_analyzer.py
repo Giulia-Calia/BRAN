@@ -307,9 +307,8 @@ class TestingBinReadAnalyzer:
         read_counts = self.parameters["read_counts"]
         no_sig_data = {"clone": [], "bin": [], "chr": [], "genome_position": [], "logFC": [], "PValue": []}
 
-        for el in fold_change:
-
-
+        # for el in fold_change:
+        pass
 
     def plot_background(self, fig):  # , df_counts
         read_counts = self.parameters["read_counts"]

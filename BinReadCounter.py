@@ -635,12 +635,12 @@ class BinReadCounter:
 
             elif cigar:
                 out_data["cigar_filt"] = True
-                out_data["read_counts"] = self._load_cigar_read_counts()
+                out_data["read_counts"] = self._load_cigar_read_counts(other_cigar_filters)
 
             elif cigar and other_cigar_filters:
                 out_data["cigar_filt"] = True
                 out_data["other_cigar_filt"] = True
-                out_data["read_counts"] = self._load_cigar_read_counts()
+                out_data["read_counts"] = self._load_cigar_read_counts(other_cigar_filters)
 
             else:
                 out_data["read_counts"] = self._load_reads()

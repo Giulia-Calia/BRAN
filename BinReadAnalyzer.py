@@ -448,17 +448,17 @@ class BinReadAnalyzer:
                                        legend_orientation="h",
                                        barmode="overlay")
 
-        fig_all.show()
-        fig_all_norm.show()
-        fig_log_norm.show()
-        save_fig_all = fig_all.write_image(saving_folder + "all_sample_dist_" + str(self.bin_size) + ".pdf",
+        # fig_all.show()
+        # fig_all_norm.show()
+        # fig_log_norm.show()
+        save_fig_all = fig_all.write_image(saving_folder + "/all_sample_dist_" + str(self.bin_size) + ".pdf",
                                            width=1280,
                                            height=1024)
-        save_fig_all_norm = fig_all_norm.write_image(saving_folder + "all_sample_norm_dist_" +
+        save_fig_all_norm = fig_all_norm.write_image(saving_folder + "/all_sample_norm_dist_" +
                                                      str(self.bin_size) + ".pdf",
                                                      width=1280,
                                                      height=1024)
-        save_fig_log_norm = fig_log_norm.write_image(saving_folder + "all_sample_norm_log_dist_" +
+        save_fig_log_norm = fig_log_norm.write_image(saving_folder + "/all_sample_norm_log_dist_" +
                                                      str(self.bin_size) + ".pdf",
                                                      width=1280,
                                                      height=1024)
@@ -509,8 +509,8 @@ class BinReadAnalyzer:
                                     " - Chr: " + str(chrom) + " - Bin Size: " + str(self.bin_size),
                               legend_orientation="h")
 
-        fig.show()
-        save_fig = fig.write_image(saving_folder + "scatter_counts_chr" +
+        # fig.show()
+        save_fig = fig.write_image(saving_folder + "/scatter_counts_chr" +
                                    str(chrom) + sample + str(self.bin_size) + ".pdf",
                                    width=1280,
                                    height=1024)
@@ -561,8 +561,8 @@ class BinReadAnalyzer:
                                     " - Bin Size: " + str(self.bin_size),
                               legend_orientation="h")
 
-        fig.show()
-        save_fig = fig.write_image(saving_folder + "scatter_counts_chr" + str(chrom) + str(self.bin_size) + ".pdf",
+        # fig.show()
+        save_fig = fig.write_image(saving_folder + "/scatter_counts_chr" + str(chrom) + str(self.bin_size) + ".pdf",
                                    width=1280,
                                    height=1024)
 
@@ -608,8 +608,8 @@ class BinReadAnalyzer:
             fig.update_layout(title="Read Counts - Clone: " + sample + " - Bin Size: " + str(self.bin_size),
                               legend_orientation="h")
 
-        fig.show()
-        save_fig = fig.write_image(saving_folder + "scatter_counts_" + sample + str(self.bin_size) + ".pdf",
+        # fig.show()
+        save_fig = fig.write_image(saving_folder + "/scatter_counts_" + sample + str(self.bin_size) + ".pdf",
                                    width=1280,
                                    height=1024)
 
@@ -654,8 +654,8 @@ class BinReadAnalyzer:
             fig.update_layout(title="Read Counts - All Clones - All Chromosomes - Bin Size: " + str(self.bin_size),
                               legend_orientation="h")
 
-        fig.show()
-        save_fig = fig.write_image(saving_folder + "scatter_all_counts" + str(self.bin_size) + ".pdf",
+        # fig.show()
+        save_fig = fig.write_image(saving_folder + "/scatter_all_counts" + str(self.bin_size) + ".pdf",
                                    width=1280,
                                    height=1024)
 
@@ -715,8 +715,8 @@ class BinReadAnalyzer:
                                     str(self.bin_size),
                               legend_orientation="h")
 
-        fig.show()
-        save_fig = fig.write_image(saving_folder + "scatter__norm_counts_chr" +
+        # fig.show()
+        save_fig = fig.write_image(saving_folder + "/scatter__norm_counts_chr" +
                                    str(chrom) + sample + str(self.bin_size) + ".pdf",
                                    width=1280,
                                    height=1024)
@@ -769,9 +769,9 @@ class BinReadAnalyzer:
                                     str(self.bin_size),
                               legend_orientation="h")
 
-        fig.show()
+        # fig.show()
         save_fig = fig.write_image(
-            saving_folder + "scatter_norm_counts_chr" + str(chrom) + str(self.bin_size) + ".pdf",
+            saving_folder + "/scatter_norm_counts_chr" + str(chrom) + str(self.bin_size) + ".pdf",
             width=1280,
             height=1024)
 
@@ -824,8 +824,8 @@ class BinReadAnalyzer:
                                     str(self.bin_size),
                               legend_orientation="h")
 
-        fig.show()
-        save_fig = fig.write_image(saving_folder + "scatter_norm_counts_" + sample + str(self.bin_size) + ".pdf",
+        # fig.show()
+        save_fig = fig.write_image(saving_folder + "/scatter_norm_counts_" + sample + str(self.bin_size) + ".pdf",
                                    width=1280,
                                    height=1024)
 
@@ -870,56 +870,12 @@ class BinReadAnalyzer:
                 title="Normalized Read Counts - Clone: all - Chr: all - Bin Size: " + str(self.bin_size),
                 legend_orientation="h")
 
-        fig.show()
-        save_fig = fig.write_image(saving_folder + "scatter_norm_all_counts" + str(self.bin_size) + ".pdf",
+        # fig.show()
+        save_fig = fig.write_image(saving_folder + "/scatter_norm_all_counts" + str(self.bin_size) + ".pdf",
                                    width=1280,
                                    height=1024)
 
     def plot_sig_data_chr_sample(self, saving_folder, fc, p_val, cigar, chrom, sample):
-        read_counts = self.parameters["read_counts"]
-        # read_counts = df_counts
-
-        fold_change = self.fold_change
-        sig_fc = self.sig_fc
-        fig = go.Figure()
-
-        fig.update_xaxes(title_text="Chromosomes_Bins")
-        fig.update_yaxes(title_text="Fold-Change")
-
-        for clone in sig_fc.clone.unique():
-            sub_df = sig_fc[sig_fc["clone"] == clone]
-            no_sig_fc = fold_change[clone].drop(list(sub_df["bin"]))
-
-            fig.add_trace(go.Scatter(x=sub_df["bin"],
-                                     y=sub_df["logFC"],
-                                     mode="markers",
-                                     name=clone))
-
-            fig.add_trace(go.Scatter(x=no_sig_fc.index.values,
-                                     y=no_sig_fc["logFC"],
-                                     mode="markers",
-                                     marker=dict(color="rgb(176, 196, 222)"),  # silver
-                                     showlegend=False))
-
-        self.add_threshold_fc(fig, fc)
-
-        self.plot_background(fig)
-
-        if cigar:
-            fig.update_layout(title="Cigar Filter - Significant Fold Change Counts - Clone: all - Chr: all - "
-                                    "Bin Size: " + str(self.bin_size) + " fc_threshold: " + str(fc) + " p_value: " +
-                                    str(p_val),
-                              legend_orientation="h")
-        else:
-            fig.update_layout(title="Significant Fold Change Counts - Clone: all - Chr: all - "
-                                    "Bin Size: " + str(self.bin_size) + " fc_threshold: " + str(fc) + " p_value: " +
-                                    str(p_val),
-                              legend_orientation="h")
-
-        fig.show()
-        save_fig = fig.write_image(saving_folder + "counts_fold_change" + str(self.bin_size) + ".pdf",
-                                   width=1280,
-                                   height=1024)
         pass
 
     def plot_sig_data_chr(self):
@@ -969,8 +925,8 @@ class BinReadAnalyzer:
                                     str(p_val),
                               legend_orientation="h")
 
-        fig.show()
-        save_fig = fig.write_image(saving_folder + "counts_fold_change" + str(self.bin_size) + ".pdf",
+        # fig.show()
+        save_fig = fig.write_image(saving_folder + "/counts_fold_change" + str(self.bin_size) + ".pdf",
                                    width=1280,
                                    height=1024)
 
