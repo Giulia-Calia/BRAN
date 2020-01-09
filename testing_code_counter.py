@@ -410,7 +410,7 @@ class TestingBinReadCounter:
 
                         for i in range(bins):
                             chrom_column[clone].append(chr_name)
-                            bin_column[clone].append(str(i))
+                            bin_column[clone].append(i)  #changed from(str(i))
 
                     # the list of univocal chromosome is used here in order to place the counts
                     # in the right chromosome
@@ -494,6 +494,8 @@ class TestingBinReadCounter:
 
             for j in range(len(bin_column[list(bin_column.keys())[0]])):
                 index_column.append(j)
+
+            print(type(bin_column))
             # preparing for final DataFrame concatenation
             index_column_df = pd.DataFrame({"index": index_column})
             chrom_column_df = pd.DataFrame({"chr": chrom_column[list(chrom_column.keys())[0]]})
@@ -761,6 +763,8 @@ if __name__ == "__main__":
 
     counter = TestingBinReadCounter(args.folder, args.bin_size, flags, args.reference, args.output_pickle)
 
+    print(counter._load_unmapped_reads(args.other_cigar_filters, "prova"))
+    exit(1)
     # if args.cigar_filter:
     #     print(counter._load_cigar_read_counts(args.other_cigar_filters, args.cigar_filter))
     # else:

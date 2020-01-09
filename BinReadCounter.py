@@ -195,7 +195,7 @@ class BinReadCounter:
 
                         for i in range(bins):
                             chrom_column[clone].append(chr_name)
-                            bin_column[clone].append(str(i))
+                            bin_column[clone].append(i)  # changed from str(i)
 
                     # the list of univocal chromosome is used here in order to place the counts
                     # in the right chromosome
@@ -309,7 +309,7 @@ class BinReadCounter:
 
                     for i in range(bins):
                         chrom_column[clone].append(chr_name)
-                        bin_column[clone].append(str(i))
+                        bin_column[clone].append(i)  # changed from (str(i))
 
                 # the list of univocal chromosome is used here in order to place the counts
                 # in the right chromosome
@@ -392,7 +392,7 @@ class BinReadCounter:
 
                         for i in range(bins):
                             chrom_column[clone].append(chr_name)
-                            bin_column[clone].append(str(i))
+                            bin_column[clone].append(i)  # changed from (str(i))
 
                     # the list of univocal chromosome is used here in order to place the counts
                     # in the right chromosome
@@ -473,7 +473,6 @@ class BinReadCounter:
 
             for j in range(len(bin_column[list(bin_column.keys())[0]])):
                 index_column.append(j)
-
             # preparing for final DataFrame concatenation
             index_column_df = pd.DataFrame({"index": index_column})
             chrom_column_df = pd.DataFrame({"chr": chrom_column[list(chrom_column.keys())[0]]})

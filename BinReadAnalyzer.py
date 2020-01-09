@@ -390,7 +390,7 @@ class BinReadAnalyzer:
         fig_all.update_yaxes(title_text="Frequency")
 
         for col in read_counts.columns:
-            if col != "index" and col != "chr" and col != 'bin':
+            if col != "index" and col != "chr" and col != "bin":
                 counts_to_plot.append(read_counts[col])
                 col_labels.append(col)
                 fig_all.add_trace(go.Histogram(x=read_counts[col],
@@ -483,7 +483,7 @@ class BinReadAnalyzer:
         read_counts = self.parameters["read_counts"]
         c_name = None
         for c in list(read_counts["chr"]):
-            if chrom in c:
+            if c.endswith(str(chrom)):
                 c_name = c
         fig.update_xaxes(title_text="Chromosomes_Bins")
         fig.update_yaxes(title_text="Read_Count_Per_Bin")
@@ -534,7 +534,7 @@ class BinReadAnalyzer:
         read_counts = self.parameters["read_counts"]
         c_name = None
         for c in list(read_counts["chr"]):
-            if chrom in c:
+            if c.endswith(str(chrom)):
                 c_name = c
 
         fig.update_xaxes(title_text="Chromosomes_Bins")
@@ -680,7 +680,7 @@ class BinReadAnalyzer:
         c_name = None
 
         for c in list(read_counts["chr"]):
-            if chrom in c:
+            if c.endswith(str(chrom)):
                 c_name = c
 
         fig.update_xaxes(title_text="Chromosomes_Bins")
@@ -739,7 +739,7 @@ class BinReadAnalyzer:
         norm_counts = self.norm
         c_name = None
         for c in list(read_counts["chr"]):
-            if str(chrom) in c:
+            if c.endswith(str(chrom)):
                 c_name = c
 
         fig.update_xaxes(title_text="Chromosomes_Bins")
