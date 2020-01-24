@@ -132,7 +132,7 @@ class TestingBinReadCounter:
         #   if passed with parameters +
         # id if the read_id_info is required with parameters
         out_name = "BRAN" + str(self.bin_size)
-        if self.get_flags() == ["0", "16", "99", "147", "163", "83"]:
+        if self.get_flags() == ["99", "147", "163", "83"]:
             # if self.get_flags() == "3":
             out_name += "_df"
         else:
@@ -169,6 +169,7 @@ class TestingBinReadCounter:
             bin_column = {}
             read_counts = {}
             read_counts_concat = {}
+            sh_clipping = {"clone": [], "read_id": [], "read_pos": [], "cigar": []}
 
             dir_list = os.listdir(self.folder)
             for el in dir_list:
@@ -231,8 +232,8 @@ class TestingBinReadCounter:
                             else:
                                 if read.cigarstring is not None:
                                     # if "S" not in read.cigarstring and "H" not in read.cigarstring:
-                                    if not any(clip in read.cigarstring for clip in cigar_clip):
-                                        if str(read.flag) in self.flags:
+                                    if str(read.flag) in self.flags:
+                                        if not any(clip in read.cigarstring for clip in cigar_clip):
                                             read_pos = int(read.reference_start)
                                             # Place the read in the right bin
                                             #
@@ -245,7 +246,16 @@ class TestingBinReadCounter:
                                             read_counts[clone][list_chrom.index(chrom)][int(bin_location)] += 1
 
                                         else:
-                                            continue
+                                            read_id = read.query_name
+                                            read_pos = int(read.reference_start)
+                                            sh_clipping["clone"].append(clone)
+                                            sh_clipping["read_id"].append(read_id)
+                                            sh_clipping["read_pos"].append(read_pos)
+                                            sh_clipping["cigar"].append(read.cigarstring)
+
+
+                                    else:
+                                        continue
 
                     # in order to create a DataFrame, the lists of counts in read_counts
                     # have to be merged in a single list
@@ -266,7 +276,8 @@ class TestingBinReadCounter:
                                       axis=1)
             # self.set_cigar_reads(read_count_df)
             # return self.read_counts_cigar
-            return read_count_df
+            df_clipping = pd.DataFrame(sh_clipping)
+            return read_count_df, df_clipping
 
     def _load_reads(self):
         """Gives a data structure that stores information about the
@@ -375,6 +386,7 @@ class TestingBinReadCounter:
         read_counts_concat = {}
         count_bin = []
         unmapped_count = {}
+        sh_clipping = {"clone": [], "read_id": [], "read_pos": [], "cigar": []}
         pickle_name = self.pickle_file_name(other_cigar_filters, cigar, reference, read_info)
 
         dir_list = os.listdir(self.folder)
@@ -431,10 +443,10 @@ class TestingBinReadCounter:
                                 unmapped.write(str(read) + "\n")
 
                             cigar_clip = ["S", "H"]
-                            if cigar and read.cigarstring is not None:
-                                # if "S" not in read.cigarstring and "H" not in read.cigarstring:
-                                if not any(clip in read.cigarstring for clip in cigar_clip):
-                                    if str(read.flag) in self.flags:
+                            if str(read.flag) in self.flags:
+                                if cigar and read.cigarstring is not None:
+                                    # if "S" not in read.cigarstring and "H" not in read.cigarstring:
+                                    if not any(clip in read.cigarstring for clip in cigar_clip):
                                         read_pos = int(read.reference_start)
                                         # Place the read in the right bin
                                         #
@@ -447,12 +459,36 @@ class TestingBinReadCounter:
                                         read_counts[clone][list_chrom.index(chrom)][int(bin_location)] += 1
 
                                     else:
-                                        continue
+                                        read_id = read.query_name
+                                        read_init_pos = int(read.reference_start)
+                                        sh_clipping["clone"].append(clone)
+                                        sh_clipping["read_id"].append(read_id)
+                                        sh_clipping["read_pos"].append(read_init_pos)
+                                        sh_clipping["cigar"].append(read.cigarstring)
 
-                            elif cigar and other_cigar_filters and read.cigarstring is not None:
-                                if not any(clip in read.cigarstring for clip in cigar_clip) and \
-                                        not any(el in read.cigarstring for el in other_cigar_filters) and \
-                                        str(read.flag) in self.flags:
+                                elif cigar and other_cigar_filters and read.cigarstring is not None:
+                                    if not any(clip in read.cigarstring for clip in cigar_clip) and \
+                                            not any(el in read.cigarstring for el in other_cigar_filters):
+                                        read_pos = int(read.reference_start)
+                                        # Place the read in the right bin
+                                        #
+                                        # Dividing the read position for the length of the bin, the exact bin in
+                                        # which the read maps is obtained
+                                        #
+                                        # The corresponding element of the list is set to 1 if no other reads
+                                        # mapped in that bin before and incremented by 1 otherwise
+                                        bin_location = read_pos // self.bin_size
+                                        read_counts[clone][list_chrom.index(chrom)][int(bin_location)] += 1
+
+                                    else:
+                                        read_id = read.query_name
+                                        read_init_pos = int(read.reference_start)
+                                        sh_clipping["clone"].append(clone)
+                                        sh_clipping["read_id"].append(read_id)
+                                        sh_clipping["read_pos"].append(read_init_pos)
+                                        sh_clipping["cigar"].append(read.cigarstring)
+
+                                elif not cigar and read.cigarstring is not None:
                                     read_pos = int(read.reference_start)
                                     # Place the read in the right bin
                                     #
@@ -464,24 +500,9 @@ class TestingBinReadCounter:
                                     bin_location = read_pos // self.bin_size
                                     read_counts[clone][list_chrom.index(chrom)][int(bin_location)] += 1
 
-                                else:
-                                    continue
 
                             else:
-                                if str(read.flag) in self.flags:
-                                    read_pos = int(read.reference_start)
-                                    # Place the read in the right bin
-                                    #
-                                    # Dividing the read position for the length of the bin, the exact bin in
-                                    # which the read maps is obtained
-                                    #
-                                    # The corresponding element of the list is set to 1 if no other reads
-                                    # mapped in that bin before and incremented by 1 otherwise
-                                    bin_location = read_pos // self.bin_size
-                                    read_counts[clone][list_chrom.index(chrom)][int(bin_location)] += 1
-
-                                else:
-                                    continue
+                                continue
                     # in order to create a DataFrame, the lists of counts in read_counts
                     # have to be merged in a single list
                     for counts in read_counts[clone]:
@@ -505,7 +526,10 @@ class TestingBinReadCounter:
             read_count_df = pd.concat([index_column_df, chrom_column_df, bin_column_df, read_counts_concat_df], axis=1)
             # self.set_read_counts(read_count_df)
             # return self.read_counts
-            return read_count_df, unmapped_count
+
+            df_clipping = pd.DataFrame(sh_clipping)
+
+            return read_count_df, unmapped_count, df_clipping
 
     def _load_Ns(self):
         """Gives a data structure that store information about the number
@@ -618,7 +642,7 @@ class TestingBinReadCounter:
         """
         pickle_name = self.pickle_file_name(other_cigar_filters, cigar, reference, read_info, unmapped)
         unmapped_name = pickle_name[:pickle_name.find(".p")]
-        with open(self.out + pickle_name , "wb") as exp_file:
+        with open(self.out + pickle_name, "wb") as exp_file:
             # passing a python object to pickle, it writes the elements in
             # the same order in which they are specified
             out_data = {"bin_size": self.get_bin_size(),
@@ -626,6 +650,7 @@ class TestingBinReadCounter:
                         "bam": self.get_bam_name(),
                         "cigar_filt": None,
                         "other_cigar_filt": [],
+                        "summary_clip_file": None,
                         "read_counts": None,
                         "unmapped": None,
                         "unmapped_reads": None,
@@ -646,17 +671,21 @@ class TestingBinReadCounter:
                 if cigar:
                     counts = self._load_unmapped_reads(other_cigar_filters, unmapped_name, cigar, reference, read_info)
                     out_data["cigar_filt"] = True
+                    out_data["summary_clip_file"] = counts[2]
                     out_data["read_counts"] = counts[0]
                     out_data["unmapped"] = True
                     out_data["unmapped_reads"] = counts[1]
+                    counts[2].to_csv("SH_clipping" + pickle_name + ".txt", sep="\t")
 
                 elif cigar and other_cigar_filters:
                     counts = self._load_unmapped_reads(other_cigar_filters, unmapped_name, cigar, reference, read_info)
                     out_data["cigar_filt"] = True
                     out_data["other_cigar_filt"] = True
+                    out_data["summary_clip_file"] = counts[2]
                     out_data["read_counts"] = counts[0]
                     out_data["unmapped"] = True
                     out_data["unmapped_reads"] = counts[1]
+                    counts[2].to_csv("SH_clipping" + pickle_name + ".txt", sep="\t")
 
                 else:
                     counts = self._load_unmapped_reads(other_cigar_filters, unmapped_name, cigar, reference, read_info)
@@ -665,13 +694,16 @@ class TestingBinReadCounter:
                     out_data["unmapped_reads"] = counts[1]
 
             elif cigar:
+                cigar_counts = self._load_cigar_read_counts(other_cigar_filters, cigar)
                 out_data["cigar_filt"] = True
-                out_data["read_counts"] = self._load_cigar_read_counts()
+                out_data["read_counts"] = cigar_counts[0]
+                out_data["summary_clip_file"] = cigar_counts[1]
+                cigar_counts[1].to_csv("SH_clipping" + pickle_name + ".txt", sep="\t")
 
             elif cigar and other_cigar_filters:
                 out_data["cigar_filt"] = True
                 out_data["other_cigar_filt"] = True
-                out_data["read_counts"] = self._load_cigar_read_counts()
+                out_data["read_counts"] = self._load_cigar_read_counts(other_cigar_filters, cigar)
 
             else:
                 out_data["read_counts"] = self._load_reads()
@@ -713,7 +745,7 @@ if __name__ == "__main__":
 
     parser.add_argument("-fl", "--flag_list",
                         nargs="+",
-                        default=["0", "16", "99", "147", "163", "83"],
+                        default=["99", "147", "163", "83"],
                         # default="3",
                         help="""A list of the bitwise-flags in SAM format that identify the reads to be counted 
                         during analyses; if different flags wants to be added, add them as single strings
@@ -762,9 +794,10 @@ if __name__ == "__main__":
         flags = args.flag_list
 
     counter = TestingBinReadCounter(args.folder, args.bin_size, flags, args.reference, args.output_pickle)
-
-    print(counter._load_unmapped_reads(args.other_cigar_filters, "prova"))
+    counter._export_pickle(args.other_cigar_filters, args.cigar_filter, args.reference, args.read_info, args.unmapped)
+    # print(counter._load_cigar_read_counts(args.other_cigar_filters, args.cigar_filter))
     exit(1)
+    # print(counter._load_unmapped_reads(args.other_cigar_filters, "prova"))
     # if args.cigar_filter:
     #     print(counter._load_cigar_read_counts(args.other_cigar_filters, args.cigar_filter))
     # else:

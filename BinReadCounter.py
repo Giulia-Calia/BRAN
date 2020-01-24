@@ -553,7 +553,7 @@ class BinReadCounter:
                             else:
                                 mate_in_bin.append("N")
 
-        read_id_df = pd.DataFrame({"ids": list(ids), "chr": chr_location, "mate_in_bin": mate_in_bin})
+        read_id_df = pd.DataFrame({"ids": list(ids), "chr": chr_location, "mate_in_bin": mate_in_bin}) # "bin", "flag"
 
         return read_id_df
 

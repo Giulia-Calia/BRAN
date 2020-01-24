@@ -251,24 +251,29 @@ class BinReadAnalyzer:
         retained significantly different from the control = fold-change >= 1.5 and p-value <= 0.05"""
         fold_change = self.fold_change
         read_counts = self.parameters["read_counts"]
-        sig_data = {"clone": [], "bin": [], "chr": [], "genome_position": [], "logFC": [], "PValue": []}
+        sig_data = {"clone": [], "bin": [], "chr": [], "genome_position": [], "index": [], "logFC": [], "PValue": []}
+        # sig_data = {"clone": [], "bin": [], "chr": [], "genome_position": [], "index": [], "logFC": []}
+
 
         for el in fold_change:
             sig_fc_values = fold_change[el][fold_change[el]["logFC"] >= fc]
             sig_fc_neg_values = fold_change[el][fold_change[el]["logFC"] <= -fc]
             sig_fc = pd.concat([sig_fc_values, sig_fc_neg_values])
             sig_fc_pvalues = sig_fc[sig_fc["PValue"] <= p_value]
+
             for i in sig_fc_pvalues.index.values:
+                effective_bin = read_counts["bin"].iloc[i]
                 sig_data["clone"].append(el)
-                sig_data["bin"].append(i)
+                sig_data["bin"].append(effective_bin)  # not index but bin!!!
                 sig_data["chr"].append(read_counts["chr"].iloc[i])
-                sig_data["genome_position"].append(i * self.bin_size)
+                sig_data["genome_position"].append(effective_bin * self.bin_size)
+                sig_data["index"].append(i)
                 sig_data["logFC"].append(sig_fc_pvalues["logFC"][i])
                 sig_data["PValue"].append(sig_fc_pvalues["PValue"][i])
 
         sig_data_df = pd.DataFrame(sig_data)
         self.set_sig_fc(sig_data_df)
-        print(self.sig_fc)
+        print(sig_data_df)
         return self.sig_fc
 
     def plot_background(self, fig):
@@ -895,20 +900,28 @@ class BinReadAnalyzer:
         fig.update_xaxes(title_text="Chromosomes_Bins")
         fig.update_yaxes(title_text="Fold-Change")
 
-        for clone in sig_fc.clone.unique():
-            sub_df = sig_fc[sig_fc["clone"] == clone]
-            no_sig_fc = fold_change[clone].drop(list(sub_df["bin"]))
+        for clone in fold_change.keys():
+            if sig_fc.empty:
+                fig.add_trace(go.Scatter(x=fold_change[clone].index.values,
+                                         y=fold_change[clone]["logFC"],
+                                         mode="markers",
+                                         marker=dict(color="rgb(176, 196, 222)"),  # silver
+                                         name=clone))
 
-            fig.add_trace(go.Scatter(x=sub_df["bin"],
-                                     y=sub_df["logFC"],
-                                     mode="markers",
-                                     name=clone))
+            else:
+                sub_df = sig_fc[sig_fc["clone"] == clone]
+                no_sig_fc = fold_change[clone].drop(list(sub_df["index"]), axis=0)
 
-            fig.add_trace(go.Scatter(x=no_sig_fc.index.values,
-                                     y=no_sig_fc["logFC"],
-                                     mode="markers",
-                                     marker=dict(color="rgb(176, 196, 222)"),  # silver
-                                     showlegend=False))
+                fig.add_trace(go.Scatter(x=sub_df["index"],
+                                         y=sub_df["logFC"],
+                                         mode="markers",
+                                         name=clone))
+
+                fig.add_trace(go.Scatter(x=no_sig_fc.index.values,
+                                         y=no_sig_fc["logFC"],
+                                         mode="markers",
+                                         marker=dict(color="rgb(176, 196, 222)"),  # silver
+                                         showlegend=False))
 
         self.add_threshold_fc(fig, fc)
 
@@ -950,7 +963,8 @@ if __name__ == "__main__":
 
     parser.add_argument("-fl", "--flag_list",
                         nargs="+",
-                        default=["0", "16", "99", "147", "163", "83"],
+                        default=["99", "147", "163", "83"],
+                        # default=["0", "16", "99", "147", "163", "83"],
                         help="""A list of the bitwise-flags in SAM format that identify the reads to be counted 
                         during analyses; if different flags wants to be added, add them as strings 
                         (e.g. "177" "129")""")

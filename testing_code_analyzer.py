@@ -167,7 +167,9 @@ class TestingBinReadAnalyzer:
             name_pickle = counter.pickle_file_name(other_cigar_filters, cigar_filter, reference, read_info, unmapped)
             parameters = counter._load_pickle(name_pickle)
 
+
             self.set_parameters(parameters)
+            print(self.parameters)
             return self.parameters
 
     def normalize_bins(self):  # , df_counts, bin_size
@@ -283,7 +285,7 @@ class TestingBinReadAnalyzer:
         fold_change = self.fold_change
         read_counts = self.parameters["read_counts"]
         # read_counts = df_counts
-        sig_data = {"clone": [], "bin": [], "chr": [], "genome_position": [], "logFC": [], "PValue": []}
+        sig_data = {"clone": [], "bin": [], "chr": [], "genome_position": [], "index": [], "logFC": [], "PValue": []}
         for el in fold_change:
             sig_fc_values = fold_change[el][fold_change[el]["logFC"] >= fc]
             sig_fc_neg_values = fold_change[el][fold_change[el]["logFC"] <= -fc]
@@ -291,16 +293,17 @@ class TestingBinReadAnalyzer:
             sig_fc_pvalues = sig_fc[sig_fc["PValue"] <= p_value]
 
             for i in sig_fc_pvalues.index.values:
+                effective_bin = read_counts["bin"].iloc[i]
                 sig_data["clone"].append(el)
-                sig_data["bin"].append(i)
+                sig_data["bin"].append(effective_bin)  # not index but bin!!!
                 sig_data["chr"].append(read_counts["chr"].iloc[i])
-                sig_data["genome_position"].append(i * self.bin_size)
+                sig_data["genome_position"].append(effective_bin * self.bin_size)
+                sig_data["index"].append(i)
                 sig_data["logFC"].append(sig_fc_pvalues["logFC"][i])
                 sig_data["PValue"].append(sig_fc_pvalues["PValue"][i])
 
         sig_data_df = pd.DataFrame(sig_data)
         self.set_sig_fc(sig_data_df)
-        # print(sig_fc)
         return self.sig_fc
 
     def get_no_sig_pos(self, fc, pvalue):
@@ -317,22 +320,32 @@ class TestingBinReadAnalyzer:
         coordinates_x = []
         coordinates_y = []
         chromosomes = []
+        start = 0
 
         for ch in read_counts["chr"]:
             if ch[ch.find("c"):] not in chromosomes:
                 chromosomes.append(ch[ch.find("c"):])
-
+        print(chromosomes)
         for chrom in chromosomes:
             single_df = read_counts[read_counts["chr"] == "CH." + chrom]
-            coordinates_x.append(single_df["index"].mean())
+            # print(single_df)
+            # here start and end are updated every time, to allow concatenation of chromosomes on the plot
+            # the average position within the interval of each chromosome take in account only the length of the
+            # interval itself
+            length = (single_df["bin"].iloc[-1] + 1) * self.parameters["bin_size"]
+            tmp_end = start + length
+            # print("start", start)
+            # print("end", tmp_end)
+            avg = start + length / 2
+            coordinates_x.append(avg)
             coordinates_y.append(-2.6)
             if int(chrom[chrom.find("r") + 1:]) % 2 == 0:
                 fig.add_shape(go.layout.Shape(type="rect",
                                               xref="x",
                                               yref="paper",
-                                              x0=single_df["index"].iloc[0],
+                                              x0=start,
                                               y0=0,
-                                              x1=single_df["index"].iloc[-1],
+                                              x1=tmp_end,
                                               y1=1,
                                               fillcolor="rgb(230, 230, 250)",  # lavande
                                               opacity=0.5,
@@ -342,14 +355,16 @@ class TestingBinReadAnalyzer:
                 fig.add_shape(go.layout.Shape(type="rect",
                                               xref="x",
                                               yref="paper",
-                                              x0=single_df["index"].iloc[0],
+                                              x0=start,
                                               y0=0,
-                                              x1=single_df["index"].iloc[-1],
+                                              x1=tmp_end,
                                               y1=1,
                                               fillcolor="rgb(240, 248, 255)",  # ~light_mint_green
                                               opacity=0.5,
                                               layer="below",
                                               line_width=0))
+
+            start = tmp_end
 
         fig.add_trace(go.Scatter(x=coordinates_x,
                                  y=coordinates_y,
@@ -997,14 +1012,14 @@ class TestingBinReadAnalyzer:
                 fig.add_trace(go.Scatter(x=fold_change[clone].index.values,
                                          y=fold_change[clone]["logFC"],
                                          mode="markers",
-                                         marker=dict(color="rgb(176, 196, 222)"),
-                                         name=clone))  # silver
+                                         marker=dict(color="rgb(176, 196, 222)"),  # silver
+                                         name=clone))
 
             else:
                 sub_df = sig_fc[sig_fc["clone"] == clone]
-                no_sig_fc = fold_change[clone].drop(list(sub_df["bin"]), axis=0)
+                no_sig_fc = fold_change[clone].drop(list(sub_df["index"]), axis=0)
 
-                fig.add_trace(go.Scatter(x=sub_df["bin"],
+                fig.add_trace(go.Scatter(x=sub_df["index"],
                                          y=sub_df["logFC"],
                                          mode="markers",
                                          name=clone))
@@ -1051,6 +1066,72 @@ class TestingBinReadAnalyzer:
         #                            width=1280,
         #                            height=1024)
 
+    def plot_sh_clipping(self, control_ref):
+        """"""
+        sh_clipping = self.parameters["summary_clip_file"]
+        read_counts = self.parameters["read_counts"]
+        fig = go.Figure()
+        # for clone in read_counts.columns[3:]:
+        #     if clone != control_ref:
+        #         clone_clipping = sh_clipping[sh_clipping["clone"] == clone]
+        #         occur_count = clone_clipping["read_pos"].value_counts()
+        #         pos = occur_count.index
+        #         fig = go.Figure()
+        #         fig.add_trace(go.Scatter(x=pos,
+        #                                  y=occur_count,
+        #                                  mode="markers",
+        #                                  name=clone))
+        #         self.plot_background(fig)
+        #         fig.show()
+
+        clone_df = sh_clipping[sh_clipping["clone"] == "test1_alignSort"]
+        chr_col = []
+
+        for chrom in read_counts["chr"].value_counts().index:
+            for el in clone_df["read_id"]:
+                if str(chrom) in str(el):
+                    chr_col.append(chrom)
+
+        clone_df["chr"] = chr_col
+        chr1 = clone_df[clone_df["chr"] == "CH.chr1"]
+        chr1_pos = list(chr1["read_pos"])
+        print(chr1_pos)
+        chr2 = clone_df[clone_df["chr"] == "CH.chr2"]
+        chr2_pos = list(chr2["read_pos"])
+        print(chr2_pos)
+        chr3 = clone_df[clone_df["chr"] == "CH.chr3"]
+        chr3_pos = list(chr3["read_pos"])
+        print(chr3_pos)
+
+        augmented_pos2 = []
+        augmented_pos3 = []
+        for pos in chr2_pos:
+            augmented_pos2.append(int(pos) + 21500000)
+
+        for pos in chr3_pos:
+            augmented_pos3.append(int(pos) + 39000000)
+
+        plot_pos = chr1_pos + augmented_pos2 + augmented_pos3
+        clone_df["plot_positions"] = plot_pos
+
+        print(clone_df)
+
+        occur_count = clone_df["plot_positions"].value_counts()
+        pos = occur_count.index
+        print(pos)
+        hover_pos = clone_df["read_pos"].value_counts().index
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=pos,
+                                 y=occur_count,
+                                 hovertext=hover_pos,
+                                 hovertemplate='<b>Chrom_position</b>: %{hovertext}',
+                                 hoverinfo="text",
+                                 mode="markers",
+                                 name="test_1"
+                                 ))
+        self.plot_background(fig)
+        fig.show()
+
 
 if __name__ == "__main__":
 
@@ -1071,7 +1152,7 @@ if __name__ == "__main__":
 
     parser.add_argument("-fl", "--flag_list",
                         nargs="+",
-                        default=["0", "16", "99", "147", "163", "83"],
+                        default=["99", "147", "163", "83"],
                         help="""A list of the bitwise-flags in SAM format that identify the reads to be counted 
                         during analyses; if different flags wants to be added, add them as strings 
                         (e.g. "177" "129")""")
@@ -1157,31 +1238,42 @@ if __name__ == "__main__":
         flags = args.flag_list
 
     analyzer = TestingBinReadAnalyzer(args.folder, args.bin_size, args.reference, flags, args.output_pickle)
-
     params = analyzer.load_data(other_cigar_filters=args.other_cigar_filters,
                                 cigar_filter=args.cigar_filter,
                                 reference=args.reference,
                                 read_info=args.read_info,
                                 unmapped=args.unmapped,
                                 verbose=True)
+    analyzer.plot_sh_clipping(args.control_name)
+
+    exit(1)
+
+
+
+    analyzer.normalize_bins()
+    # analyzer.get_fold_change(args.control_name)
+    fc = analyzer.get_fold_change(args.control_name)
+    analyzer.get_sig_pos(args.fold_change, args.p_value)
+    analyzer.get_no_sig_pos(args.fold_change, args.p_value)
+    analyzer.plot_sig_data(args.saving_folder, args.fold_change, args.p_value, args.cigar_filter)
 
     counts = params["read_counts"]
-    start = 15341960 // args.bin_size
-    print(start)
-    end = 15342700 // args.bin_size
-    print(end)
+    start = 15309000 // args.bin_size
+    # print(start)
+    end = 15309706 // args.bin_size
+    # print(end)
 
     data = counts[counts["chr"] == "CH.chr1"]
     data = data[data['bin'] >= start]
     data = data[data['bin'] <= end]
     print(data)
+    # fc_start_filt = data["index"].iloc[0]
+    # fc_end_filt = data["index"].iloc[-1]
 
-    exit(1)
+    # for clone in fc:
+    #     print(fc[clone].iloc[fc_start_filt:fc_end_filt + 1])
 
-    analyzer.normalize_bins()
-    analyzer.get_fold_change(args.control_name)
-    analyzer.get_sig_pos(args.fold_change, args.p_value)
-    analyzer.get_no_sig_pos(args.fold_change, args.p_value)
+    # exit(1)
 
     if not os.path.exists(args.saving_folder):
         os.mkdir(args.saving_folder)
@@ -1205,7 +1297,6 @@ if __name__ == "__main__":
         analyzer.plot_all(args.saving_folder, args.reference, args.cigar_filter, args.Ns_count)
         analyzer.plot_norm_data_all(args.saving_folder, args.reference, args.cigar_filter, args.Ns_count)
 
-    analyzer.plot_sig_data(args.saving_folder, args.fold_change, args.p_value, args.cigar_filter)
     # analyzer.plot_sig_data_chr_sample(args.saving_folder, args.fold_change, args.p_value, args.cigar_filter, args.chromosome, args.sample)
 
 
