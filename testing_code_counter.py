@@ -708,7 +708,7 @@ class TestingBinReadCounter:
             else:
                 out_data["read_counts"] = self._load_reads()
 
-            print(exp_file, "\n", out_data)
+            # print(exp_file, "\n", out_data)
             pickle.dump(out_data, exp_file)
 
     def stats(self):
