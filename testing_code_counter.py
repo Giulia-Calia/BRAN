@@ -164,12 +164,13 @@ class TestingBinReadCounter:
         if cigar_filter is True:
             cigar_clip = ["S", "H"]
             list_chrom = []
+            chrom_length = {}
             index_column = []
             chrom_column = {}
             bin_column = {}
             read_counts = {}
             read_counts_concat = {}
-            sh_clipping = {"clone": [], "read_id": [], "read_pos": [], "cigar": []}
+            sh_clipping = {"clone": [], "read_id": [], "chr": [], "cigar": [], "chrom_pos": []}
 
             dir_list = os.listdir(self.folder)
             for el in dir_list:
@@ -194,6 +195,7 @@ class TestingBinReadCounter:
                         # a list of univocal chromosome names is created
                         if chr_name not in list_chrom:
                             list_chrom.append(chr_name)
+                            chrom_length[chr_name] = chr_length
 
                         bins = chr_length // self.bin_size + 1  # number of bin in each chromosome
                         read_counts[clone].append([0] * bins)
@@ -250,8 +252,10 @@ class TestingBinReadCounter:
                                             read_pos = int(read.reference_start)
                                             sh_clipping["clone"].append(clone)
                                             sh_clipping["read_id"].append(read_id)
-                                            sh_clipping["read_pos"].append(read_pos)
+                                            sh_clipping["chr"].append(read.reference_name)
                                             sh_clipping["cigar"].append(read.cigarstring)
+                                            sh_clipping["chrom_pos"].append(read_pos)
+
 
 
                                     else:
@@ -277,7 +281,7 @@ class TestingBinReadCounter:
             # self.set_cigar_reads(read_count_df)
             # return self.read_counts_cigar
             df_clipping = pd.DataFrame(sh_clipping)
-            return read_count_df, df_clipping
+            return read_count_df, df_clipping, chrom_length
 
     def _load_reads(self):
         """Gives a data structure that stores information about the
@@ -379,6 +383,7 @@ class TestingBinReadCounter:
     def _load_unmapped_reads(self, other_cigar_filters, name, cigar=False, reference=False, read_info=False):
         """"""
         list_chrom = []
+        chrom_length = {}
         index_column = []
         chrom_column = {}
         bin_column = {}
@@ -386,7 +391,7 @@ class TestingBinReadCounter:
         read_counts_concat = {}
         count_bin = []
         unmapped_count = {}
-        sh_clipping = {"clone": [], "read_id": [], "read_pos": [], "cigar": []}
+        sh_clipping = {"clone": [], "read_id": [], "chr": [], "cigar": [], "chrom_pos": []}
         pickle_name = self.pickle_file_name(other_cigar_filters, cigar, reference, read_info)
 
         dir_list = os.listdir(self.folder)
@@ -415,6 +420,8 @@ class TestingBinReadCounter:
                         # a list of univocal chromosome names is created
                         if chr_name not in list_chrom:
                             list_chrom.append(chr_name)
+                            chrom_length[chr_name] = chr_length
+
                         # print(chr_length)
                         bins = chr_length // self.bin_size + 1  # number of bin in each chromosome
                         count_bin.append(bins)
@@ -423,6 +430,7 @@ class TestingBinReadCounter:
                         for i in range(bins):
                             chrom_column[clone].append(chr_name)
                             bin_column[clone].append(i)  #changed from(str(i))
+
 
                     # the list of univocal chromosome is used here in order to place the counts
                     # in the right chromosome
@@ -460,11 +468,12 @@ class TestingBinReadCounter:
 
                                     else:
                                         read_id = read.query_name
-                                        read_init_pos = int(read.reference_start)
+                                        read_pos = int(read.reference_start)
                                         sh_clipping["clone"].append(clone)
                                         sh_clipping["read_id"].append(read_id)
-                                        sh_clipping["read_pos"].append(read_init_pos)
+                                        sh_clipping["chr"].append(read.reference_name)
                                         sh_clipping["cigar"].append(read.cigarstring)
+                                        sh_clipping["chrom_pos"].append(read_pos)
 
                                 elif cigar and other_cigar_filters and read.cigarstring is not None:
                                     if not any(clip in read.cigarstring for clip in cigar_clip) and \
@@ -529,7 +538,7 @@ class TestingBinReadCounter:
 
             df_clipping = pd.DataFrame(sh_clipping)
 
-            return read_count_df, unmapped_count, df_clipping
+            return read_count_df, unmapped_count, df_clipping, chrom_length
 
     def _load_Ns(self):
         """Gives a data structure that store information about the number
@@ -648,6 +657,7 @@ class TestingBinReadCounter:
             out_data = {"bin_size": self.get_bin_size(),
                         "flags": self.get_flags(),
                         "bam": self.get_bam_name(),
+                        "chrom_length": {},
                         "cigar_filt": None,
                         "other_cigar_filt": [],
                         "summary_clip_file": None,
@@ -670,6 +680,7 @@ class TestingBinReadCounter:
             if unmapped:
                 if cigar:
                     counts = self._load_unmapped_reads(other_cigar_filters, unmapped_name, cigar, reference, read_info)
+                    out_data["chrom_length"] = counts[3]
                     out_data["cigar_filt"] = True
                     out_data["summary_clip_file"] = counts[2]
                     out_data["read_counts"] = counts[0]
@@ -679,6 +690,7 @@ class TestingBinReadCounter:
 
                 elif cigar and other_cigar_filters:
                     counts = self._load_unmapped_reads(other_cigar_filters, unmapped_name, cigar, reference, read_info)
+                    out_data["chrom_length"] = counts[3]
                     out_data["cigar_filt"] = True
                     out_data["other_cigar_filt"] = True
                     out_data["summary_clip_file"] = counts[2]
@@ -695,6 +707,7 @@ class TestingBinReadCounter:
 
             elif cigar:
                 cigar_counts = self._load_cigar_read_counts(other_cigar_filters, cigar)
+                out_data["chrom_length"] = cigar_counts[2]
                 out_data["cigar_filt"] = True
                 out_data["read_counts"] = cigar_counts[0]
                 out_data["summary_clip_file"] = cigar_counts[1]

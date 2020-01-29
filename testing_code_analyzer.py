@@ -1067,7 +1067,7 @@ class TestingBinReadAnalyzer:
         #                            width=1280,
         #                            height=1024)
 
-    def plot_sh_clipping(self, control_ref):
+    def raw_plot_sh_clipping(self, control_ref):
         """"""
         sh_clipping = self.parameters["summary_clip_file"]
         read_counts = self.parameters["read_counts"]
@@ -1085,13 +1085,13 @@ class TestingBinReadAnalyzer:
 
         clone_df["chr"] = chr_col
         chr1 = clone_df[clone_df["chr"] == "CH.chr1"]
-        chr1_pos = list(chr1["read_pos"])
+        chr1_pos = list(chr1["chrom_pos"])
         # print(chr1_pos)
         chr2 = clone_df[clone_df["chr"] == "CH.chr2"]
-        chr2_pos = list(chr2["read_pos"])
+        chr2_pos = list(chr2["chrom_pos"])
         # print(chr2_pos)
         chr3 = clone_df[clone_df["chr"] == "CH.chr3"]
-        chr3_pos = list(chr3["read_pos"])
+        chr3_pos = list(chr3["chrom_pos"])
         # print(chr3_pos)
 
         augmented_pos2 = []
@@ -1118,10 +1118,8 @@ class TestingBinReadAnalyzer:
         clone_df_counts.to_csv("correct_counts_pos.txt", sep="\t")
 
         # print(occur_count)
-        pos = clone_df_counts["plot_positions"]  # is not in the same order of the dataframe, it goes in the order of the counts;
-        # in a sense they are related. the same has to be done with the real position on the chromosomes
-        # print(pos)
-        hover_pos = clone_df_counts["read_pos"]
+        pos = clone_df_counts["plot_positions"]
+        hover_pos = clone_df_counts["chrom_pos"]
         fig = go.Figure()
         # Here I changed the pop-up information on the plot, writing the exact position of the read on the chromosome,
         # instead the position in the entire genome = x-axis
@@ -1135,7 +1133,6 @@ class TestingBinReadAnalyzer:
                                  name="test_1"
                                  ))
 
-
         self.plot_background(fig)
         fig.update_xaxes(title_text="Genome Length")
         fig.update_yaxes(title_text="Count Repeated Clip Positions")
@@ -1143,6 +1140,62 @@ class TestingBinReadAnalyzer:
                                 "Bin Size: " + str(self.bin_size))
         fig.show()
 
+    def plot_sh_clipping(self, control_ref):
+        sh_clipping = self.parameters["summary_clip_file"]
+        read_counts = self.parameters["read_counts"]
+        chromosomes = sh_clipping["chr"].value_counts().index
+        genome_pos = []
+        start = 0
+
+        clone_clipping = sh_clipping[sh_clipping["clone"] != control_ref]
+        for chrom in chromosomes:
+            bin_number = read_counts["chr"].value_counts()[chrom]
+            single_df = sh_clipping[sh_clipping["chr"] == chrom]
+            single_df_clone = single_df[single_df["clone"] != control_ref]
+            aug_length = bin_number * self.parameters["bin_size"]
+            tmp_end = start + aug_length
+            if chrom == chromosomes[0]:
+                genome_pos = list(single_df_clone["chrom_pos"])
+            else:
+                genome_pos += list(single_df_clone["chrom_pos"] + start)
+            start = tmp_end
+
+        print(genome_pos)
+
+        clone_clipping["genome_pos"] = genome_pos
+        counts = pd.DataFrame({"genome_pos": clone_clipping["genome_pos"].value_counts().index,
+                               "read_rep": clone_clipping["genome_pos"].value_counts()})
+
+        clone_clipping_counts = pd.merge(clone_clipping, counts, on="genome_pos")
+        print(clone_clipping_counts)
+
+        pos = clone_clipping["genome_pos"]
+        rep = clone_clipping_counts["read_rep"]
+        hover_pos = clone_clipping["chrom_pos"]
+        fig = go.Figure()
+        # Here I changed the pop-up information on the plot, writing the exact position of the read on the chromosome,
+        # instead the position in the entire genome = x-axis
+        fig.add_trace(go.Scatter(x=pos,
+                                 y=rep,
+                                 hovertext=hover_pos,
+                                 # for CONTROL
+                                 # hovertemplate=
+                                 # "<b>Chrom_position</b>: %{hovertext:,}" + "<br><b>Genome_position</b>: %{x:,}",
+                                 hovertemplate=
+                                 "<b>Chrom_position</b>: %{hovertext:,}",
+                                 hoverinfo="text",
+                                 mode="markers",
+                                 name="test_1"
+                                 ))
+
+        self.plot_background(fig)
+        fig.update_xaxes(title_text="Genome Length")
+        fig.update_yaxes(title_text="Count Repeated Clip Positions")
+        fig.update_layout(title=clone_clipping["clone"].iloc[0] + " - Soft_Hard Clipped Read Positions - "
+                                "Bin Size: " + str(self.bin_size))
+        fig.show()
+
+        print()
 
 if __name__ == "__main__":
 
