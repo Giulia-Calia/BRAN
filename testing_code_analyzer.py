@@ -216,7 +216,7 @@ class TestingBinReadAnalyzer:
         self.set_norm(norm_counts)
         return self.norm  # an edger object (table) of counts
 
-    def get_fold_change(self, control_name=None):  # df_counts, bin_size,
+    def get_fold_change(self, saving_folder, control_name=None):  # df_counts, bin_size,
         """This method calculates the pairwise logFoldChange for the different clones
         against the control plant counts, in order to see, if are present, significant
         differences in terms of mapping reads"""
@@ -255,8 +255,11 @@ class TestingBinReadAnalyzer:
                     exact_test_pd_df = pandas2ri.ri2py_dataframe(exact_test_df)
                     # print(exact_test_pd_df)
                     fold_change[col_name] = exact_test_pd_df
+                    fold_change_df = fold_change[col_name]
+                    fold_change_df.to_csv(saving_folder +
+                                          "fold_change.txt",
+                                          sep="\t")
 
-            # print(fold_change)
             self.set_fold_change(fold_change)
             return self.fold_change
 
@@ -386,13 +389,13 @@ class TestingBinReadAnalyzer:
         fig.add_shape(go.layout.Shape(type="line",
                                       x0=0,
                                       y0=fc,
-                                      x1=len(read_counts),
+                                      x1=len(read_counts) * self.bin_size,
                                       y1=fc))
 
         fig.add_shape(go.layout.Shape(type="line",
                                       x0=0,
                                       y0=-fc,
-                                      x1=len(read_counts),
+                                      x1=len(read_counts) * self.bin_size,
                                       y1=-fc))
 
         fig.update_shapes(dict(xref="x",
@@ -1000,9 +1003,8 @@ class TestingBinReadAnalyzer:
         # read_counts = df_counts
 
         fold_change = self.fold_change
-        # print(fold_change['test1_alignSort'].index.values)
+        # print(fold_change['test1_alignSort'].index.values * self.bin_size)
         sig_fc = self.sig_fc
-        # print(sig_fc)
         fig = go.Figure()
 
         fig.update_xaxes(title_text="Chromosomes_Bins")
@@ -1010,7 +1012,7 @@ class TestingBinReadAnalyzer:
 
         for clone in fold_change.keys():
             if sig_fc.empty:
-                fig.add_trace(go.Scatter(x=fold_change[clone].index.values,
+                fig.add_trace(go.Scatter(x=fold_change[clone].index.values * self.bin_size,
                                          y=fold_change[clone]["logFC"],
                                          mode="markers",
                                          marker=dict(color="rgb(176, 196, 222)"),  # silver
@@ -1020,12 +1022,12 @@ class TestingBinReadAnalyzer:
                 sub_df = sig_fc[sig_fc["clone"] == clone]
                 no_sig_fc = fold_change[clone].drop(list(sub_df["index"]), axis=0)
 
-                fig.add_trace(go.Scatter(x=sub_df["index"],
+                fig.add_trace(go.Scatter(x=sub_df["index"] * self.bin_size,
                                          y=sub_df["logFC"],
                                          mode="markers",
                                          name=clone))
 
-                fig.add_trace(go.Scatter(x=no_sig_fc.index.values,
+                fig.add_trace(go.Scatter(x=no_sig_fc.index.values * self.bin_size,
                                          y=no_sig_fc["logFC"],
                                          mode="markers",
                                          marker=dict(color="rgb(176, 196, 222)"),  # silver
@@ -1063,9 +1065,9 @@ class TestingBinReadAnalyzer:
                               legend_orientation="h")
 
         fig.show()
-        # save_fig = fig.write_image(saving_folder + "counts_fold_change" + str(self.bin_size) + ".pdf",
-        #                            width=1280,
-        #                            height=1024)
+        save_fig = fig.write_image(saving_folder + "counts_fold_change" + str(self.bin_size) + ".pdf",
+                                   width=1280,
+                                   height=1024)
 
     def raw_plot_sh_clipping(self, control_ref):
         """"""
@@ -1140,7 +1142,8 @@ class TestingBinReadAnalyzer:
                                 "Bin Size: " + str(self.bin_size))
         fig.show()
 
-    def plot_sh_clipping(self, control_ref):
+    def plot_sh_clipping(self, control_ref, saving_folder):
+        """"""
         sh_clipping = self.parameters["summary_clip_file"]
         read_counts = self.parameters["read_counts"]
         chromosomes = sh_clipping["chr"].value_counts().index
@@ -1153,21 +1156,29 @@ class TestingBinReadAnalyzer:
             single_df = sh_clipping[sh_clipping["chr"] == chrom]
             single_df_clone = single_df[single_df["clone"] != control_ref]
             aug_length = bin_number * self.parameters["bin_size"]
+            # aug_length = self.parameters["chrom_length"][chrom]
+            print(aug_length)
             tmp_end = start + aug_length
+            print("tmp_end", tmp_end)
             if chrom == chromosomes[0]:
                 genome_pos = list(single_df_clone["chrom_pos"])
             else:
                 genome_pos += list(single_df_clone["chrom_pos"] + start)
             start = tmp_end
 
-        print(genome_pos)
+        # print(genome_pos)
 
         clone_clipping["genome_pos"] = genome_pos
         counts = pd.DataFrame({"genome_pos": clone_clipping["genome_pos"].value_counts().index,
                                "read_rep": clone_clipping["genome_pos"].value_counts()})
 
         clone_clipping_counts = pd.merge(clone_clipping, counts, on="genome_pos")
-        print(clone_clipping_counts)
+        clone_clipping_counts.to_csv(saving_folder +
+                                     "clipped_reads_count_" +
+                                     clone_clipping["clone"].iloc[0] +
+                                     ".txt",
+                                     sep="\t")
+        # print(clone_clipping_counts)
 
         pos = clone_clipping["genome_pos"]
         rep = clone_clipping_counts["read_rep"]
@@ -1182,7 +1193,7 @@ class TestingBinReadAnalyzer:
                                  # hovertemplate=
                                  # "<b>Chrom_position</b>: %{hovertext:,}" + "<br><b>Genome_position</b>: %{x:,}",
                                  hovertemplate=
-                                 "<b>Chrom_position</b>: %{hovertext:,}",
+                                 "<b>Chrom_position</b>: %{hovertext:,}" + "<br>%{y}",
                                  hoverinfo="text",
                                  mode="markers",
                                  name="test_1"
@@ -1191,11 +1202,12 @@ class TestingBinReadAnalyzer:
         self.plot_background(fig)
         fig.update_xaxes(title_text="Genome Length")
         fig.update_yaxes(title_text="Count Repeated Clip Positions")
-        fig.update_layout(title=clone_clipping["clone"].iloc[0] + " - Soft_Hard Clipped Read Positions - "
-                                "Bin Size: " + str(self.bin_size))
+        fig.update_layout(title=clone_clipping["clone"].iloc[0] + " - Soft_Hard Clipped Read Positions")
         fig.show()
+        save_fig = fig.write_image(saving_folder + "clipped_reads_counts" + str(self.bin_size) + ".pdf",
+                                   width=1280,
+                                   height=1024)
 
-        print()
 
 if __name__ == "__main__":
 
@@ -1308,7 +1320,16 @@ if __name__ == "__main__":
                        read_info=args.read_info,
                        unmapped=args.unmapped,
                        verbose=True)
-    analyzer.plot_sh_clipping(args.control_name)
+
+    if not os.path.exists(args.saving_folder):
+        os.mkdir(args.saving_folder)
+
+    analyzer.normalize_bins()
+    analyzer.get_fold_change(args.saving_folder, args.control_name)
+    analyzer.get_sig_pos(args.fold_change, args.p_value)
+    analyzer.plot_sig_data(args.saving_folder, args.fold_change, args.p_value, args.cigar_filter)
+    analyzer.plot_sh_clipping(args.control_name, args.saving_folder)
+
     exit(1)
 
     analyzer.normalize_bins()
@@ -1316,7 +1337,6 @@ if __name__ == "__main__":
     fc = analyzer.get_fold_change(args.control_name)
     analyzer.get_sig_pos(args.fold_change, args.p_value)
     analyzer.get_no_sig_pos(args.fold_change, args.p_value)
-    analyzer.plot_sig_data(args.saving_folder, args.fold_change, args.p_value, args.cigar_filter)
 
     counts = params["read_counts"]
     start = 15309000 // args.bin_size
@@ -1336,8 +1356,7 @@ if __name__ == "__main__":
 
     # exit(1)
 
-    if not os.path.exists(args.saving_folder):
-        os.mkdir(args.saving_folder)
+
 
     analyzer.plot_counts_distributions(args.saving_folder, args.cigar_filter)
 
