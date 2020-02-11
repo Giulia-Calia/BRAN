@@ -25,6 +25,7 @@
 import os
 import argparse
 import plotly.graph_objects as go
+import plotly.express as px
 import pandas as pd
 import numpy as np
 from testing_code_counter import TestingBinReadCounter
@@ -68,11 +69,12 @@ class TestingBinReadAnalyzer:
                         created during the running of the code
     """
 
-    def __init__(self, bam_folder_path, bin_size, ref_genome, flags, out_pickle):
+    def __init__(self, bam_folder_path, bin_size, ref_genome, flags, cigar_filter, out_pickle):
         self.folder = bam_folder_path
         self.bin_size = bin_size
         self.flags = flags
         self.ref = ref_genome
+        self.cigar_filter = cigar_filter
         self.out = out_pickle
         self.parameters = None
         self.norm = None
@@ -91,7 +93,7 @@ class TestingBinReadAnalyzer:
     def set_sig_fc(self, fc):
         self.sig_fc = fc
 
-    def load_data(self, other_cigar_filters, cigar_filter=None, reference=None, read_info=None, unmapped=None,
+    def load_data(self, cigar, cigar_filter=None, reference=None, read_info=None, unmapped=None,
                   verbose=False):
         """If the pickle file is already present in the folder and the parameters
         are not changed, the data structures were kept, otherwise it runs the
@@ -101,7 +103,7 @@ class TestingBinReadAnalyzer:
 
         Args:
             cigar_filter (bool)
-            other_cigar_filters (bool)
+            other_cigar_filter (bool)
             reference (bool): true if the reference is necessary
             read_info (bool): true if read info are necessary
             verbose (bool): default is False, but if set to True, it allows to print
@@ -113,18 +115,20 @@ class TestingBinReadAnalyzer:
             the first data structure is the read_counts and the second is the N bases
             count
         """
-        counter = TestingBinReadCounter(self.folder, self.bin_size, self.flags, self.ref, self.out)
+        counter = TestingBinReadCounter(self.folder, self.bin_size, self.flags, self.ref, self.cigar_filter, self.out)
         found = None
         bam_files = []
         i = 0
-        list_bam_dir = os.listdir(self.folder)
-        # print("bam folder: ", self.folder)
         list_pick_dir = os.listdir(self.out)
         # print("pickle folder: ", self.out)
-        for file in list_bam_dir:
-            if file.endswith(".bam"):
-                bam_files.append(file[:file.find(".bam")])
-        # print("bam files:", bam_files)
+
+        for f in self.folder:
+            list_bam_dir = os.listdir(f)
+        # print("bam folder: ", self.folder)
+            for file in list_bam_dir:
+                if file.endswith(".bam"):
+                    bam_files.append(file[:file.find(".bam")])
+                # print("bam files:", bam_files)
 
         # verify if a pickle file is present in the desired folder
         for file in list_pick_dir:
@@ -139,8 +143,8 @@ class TestingBinReadAnalyzer:
                     if parameters["bin_size"] == self.bin_size and \
                             parameters["flags"] == self.flags and \
                             all(el in parameters["bam"] for el in bam_files) and \
-                            parameters["cigar_filt"] == cigar_filter and \
-                            parameters["other_cigar_filt"] == other_cigar_filters and \
+                            parameters["cigar"] == cigar and \
+                            parameters["cigar_filter"] == cigar_filter and \
                             parameters["unmapped"] == unmapped and \
                             parameters["ref"] == counter.get_ref_name() and \
                             parameters["info"] == read_info:
@@ -158,7 +162,7 @@ class TestingBinReadAnalyzer:
                     i += 1
                     continue
         if verbose:
-            print("Warning:\nException occurred - other processes running at this moment: ", i)
+            print("Other processes running at this moment: ", i)
         if not found:
             # if not found, none of the pickle files in the current directory
             # have the same parameters of the actual running or a file pickle is not p
@@ -169,8 +173,8 @@ class TestingBinReadAnalyzer:
                       "\nBinReadCounter is running with actual parameters",
                       "\nIT COULD TAKE A WHILE to create and import the pickle file")
 
-            counter._export_pickle(other_cigar_filters, cigar_filter, reference, read_info, unmapped)
-            name_pickle = counter.pickle_file_name(other_cigar_filters, cigar_filter, reference, read_info, unmapped)
+            counter._export_pickle(cigar, reference, read_info, unmapped)
+            name_pickle = counter.pickle_file_name(cigar, reference, read_info, unmapped)
             parameters = counter._load_pickle(name_pickle)
 
             self.set_parameters(parameters)
@@ -190,7 +194,7 @@ class TestingBinReadAnalyzer:
         col_list = list(read_counts.columns)
         group = []
         for i in range(len(col_list)):
-            if col_list[i] != "index" and col_list[i] != "chr" and col_list[i] != 'bin':
+            if col_list[i] != "index" and col_list[i] != "chr" and col_list[i] != 'bin' and "cig_filt" not in col_list[i]:
                 # creates an element of the dictionary [sample_name]: r_vector_of_counts
                 read_counts_edger[col_list[i]] = robjects.IntVector(read_counts[col_list[i]])
                 if "ref_ref" in col_list[i]:
@@ -214,6 +218,7 @@ class TestingBinReadAnalyzer:
         # print(norm_counts_df)
 
         self.set_norm(norm_counts)
+        # print(self.norm)
         return self.norm  # an edger object (table) of counts
 
     def get_fold_change(self, saving_folder, control_name=None):  # df_counts, bin_size,
@@ -313,14 +318,6 @@ class TestingBinReadAnalyzer:
         sig_data_df = pd.DataFrame(sig_data)
         self.set_sig_fc(sig_data_df)
         return self.sig_fc
-
-    def get_no_sig_pos(self, fc, pvalue):
-        fold_change = self.fold_change
-        read_counts = self.parameters["read_counts"]
-        no_sig_data = {"clone": [], "bin": [], "chr": [], "genome_position": [], "logFC": [], "PValue": []}
-
-        # for el in fold_change:
-        pass
 
     def plot_background(self, fig):  # , df_counts
         read_counts = self.parameters["read_counts"]
@@ -451,78 +448,83 @@ class TestingBinReadAnalyzer:
         fig_all.update_yaxes(title_text="Frequency")
 
         for col in read_counts.columns:
-            if col != "index" and col != "chr" and col != 'bin':
+            if col != "index" and col != "chr" and col != 'bin'and "cig_filt" not in col:
                 counts_to_plot.append(read_counts[col])
                 col_labels.append(col)
-                fig_all.add_trace(go.Histogram(x=read_counts[col],
-                                               name=col))
-
-        # --plot_norm_counts_distribution--
-
-        fig_all_norm = go.Figure()
-        fig_all_norm.update_traces(opacity=0.75)
-        fig_all_norm.update_xaxes(title_text="Normalized_Counts")
-        fig_all_norm.update_yaxes(title_text="Frequency")
-
-        for i in range(0, self.norm.ncol):
-            fig_all_norm.add_trace(go.Histogram(x=list(self.norm.rx(True, i + 1)),
-                                                name=str(self.norm.colnames[i])))
-
-        # --plot_log_scaled_norm_counts_distribution--
-        fig_log_norm = go.Figure()
-        fig_log_norm.update_xaxes(title_text="Log-scaled_Normalized_Counts")
-        fig_log_norm.update_yaxes(title_text="Frequency")
-
-        for key in self.fold_change:
-            fig_log_norm.add_trace(go.Histogram(x=self.fold_change[key]["logCPM"],
-                                                name=key))
-
-        # --Titles--
-        if cigar:
-
-            fig_all.update_layout(title_text="Cigar Filter - Histogram RAW data - BRAN" +
-                                             str(self.bin_size) + " - all samples",
-                                  legend_orientation="h",
-                                  barmode="overlay")
-            fig_all_norm.update_layout(title_text="Cigar Filter - Histogram NORMALIZED data - BRAN" +
-                                                  str(self.bin_size) + " - all samples",
-                                       legend_orientation="h",
-                                       barmode="overlay")
-
-            fig_log_norm.update_layout(title_text="Cigar Filter - Histogram LOG-SCALE NORMALIZED data - BRAN" +
-                                                  str(self.bin_size) + " - all samples",
-                                       legend_orientation="h",
-                                       barmode="overlay")
-
-        else:
-            fig_all.update_layout(title_text="Histogram RAW data - BRAN" + str(self.bin_size) + " - all samples",
-                                  legend_orientation="h",
-                                  barmode="overlay")
-
-            fig_all_norm.update_layout(title_text="Histogram NORMALIZED data - BRAN" +
-                                                  str(self.bin_size) + " - all samples",
-                                       legend_orientation="h",
-                                       barmode="overlay")
-
-            fig_log_norm.update_layout(title_text="Histogram LOG-SCALE NORMALIZED data - BRAN" +
-                                                  str(self.bin_size) + " - all samples",
-                                       legend_orientation="h",
-                                       barmode="overlay")
+                # fig_all.add_trace(go.Histogram(x=read_counts[col],
+                #                                name=col))
+                # print(counts_to_plot)
+                fig_all.add_trace(go.Bar(x=list(read_counts[col].index),
+                                         y=read_counts[col],
+                                         name=col))
 
         fig_all.show()
-        fig_all_norm.show()
-        fig_log_norm.show()
-        save_fig_all = fig_all.write_image(saving_folder + "all_sample_dist_" + str(self.bin_size) + ".pdf",
-                                           width=1280,
-                                           height=1024)
-        save_fig_all_norm = fig_all_norm.write_image(saving_folder + "all_sample_norm_dist_" +
-                                                     str(self.bin_size) + ".pdf",
-                                                     width=1280,
-                                                     height=1024)
-        save_fig_log_norm = fig_log_norm.write_image(saving_folder + "all_sample_norm_log_dist_" +
-                                                     str(self.bin_size) + ".pdf",
-                                                     width=1280,
-                                                     height=1024)
+        # --plot_norm_counts_distribution--
+
+        # fig_all_norm = go.Figure()
+        # fig_all_norm.update_traces(opacity=0.75)
+        # fig_all_norm.update_xaxes(title_text="Normalized_Counts")
+        # fig_all_norm.update_yaxes(title_text="Frequency")
+        #
+        # for i in range(0, self.norm.ncol):
+        #     fig_all_norm.add_trace(go.Histogram(x=list(self.norm.rx(True, i + 1)),
+        #                                         name=str(self.norm.colnames[i])))
+        #
+        # # --plot_log_scaled_norm_counts_distribution--
+        # fig_log_norm = go.Figure()
+        # fig_log_norm.update_xaxes(title_text="Log-scaled_Normalized_Counts")
+        # fig_log_norm.update_yaxes(title_text="Frequency")
+        #
+        # for key in self.fold_change:
+        #     fig_log_norm.add_trace(go.Histogram(x=self.fold_change[key]["logCPM"],
+        #                                         name=key))
+        #
+        # # --Titles--
+        # if cigar:
+        #
+        #     fig_all.update_layout(title_text="Cigar Filter - Histogram RAW data - BRAN" +
+        #                                      str(self.bin_size) + " - all samples",
+        #                           legend_orientation="h",
+        #                           barmode="overlay")
+        #     fig_all_norm.update_layout(title_text="Cigar Filter - Histogram NORMALIZED data - BRAN" +
+        #                                           str(self.bin_size) + " - all samples",
+        #                                legend_orientation="h",
+        #                                barmode="overlay")
+        #
+        #     fig_log_norm.update_layout(title_text="Cigar Filter - Histogram LOG-SCALE NORMALIZED data - BRAN" +
+        #                                           str(self.bin_size) + " - all samples",
+        #                                legend_orientation="h",
+        #                                barmode="overlay")
+        #
+        # else:
+        #     fig_all.update_layout(title_text="Histogram RAW data - BRAN" + str(self.bin_size) + " - all samples",
+        #                           legend_orientation="h",
+        #                           barmode="overlay")
+        #
+        #     fig_all_norm.update_layout(title_text="Histogram NORMALIZED data - BRAN" +
+        #                                           str(self.bin_size) + " - all samples",
+        #                                legend_orientation="h",
+        #                                barmode="overlay")
+        #
+        #     fig_log_norm.update_layout(title_text="Histogram LOG-SCALE NORMALIZED data - BRAN" +
+        #                                           str(self.bin_size) + " - all samples",
+        #                                legend_orientation="h",
+        #                                barmode="overlay")
+        #
+        # fig_all.show()
+        # fig_all_norm.show()
+        # fig_log_norm.show()
+        # save_fig_all = fig_all.write_image(saving_folder + "all_sample_dist_" + str(self.bin_size) + ".pdf",
+        #                                    width=1280,
+        #                                    height=1024)
+        # save_fig_all_norm = fig_all_norm.write_image(saving_folder + "all_sample_norm_dist_" +
+        #                                              str(self.bin_size) + ".pdf",
+        #                                              width=1280,
+        #                                              height=1024)
+        # save_fig_log_norm = fig_log_norm.write_image(saving_folder + "all_sample_norm_log_dist_" +
+        #                                              str(self.bin_size) + ".pdf",
+        #                                              width=1280,
+        #                                              height=1024)
 
     def plot_chrom_sample(self, saving_folder, reference, chrom, sample, cigar, ns=False, fig=go.Figure()):
         """This method allows to obtain a scatter-plot of raw read_counts
@@ -1069,140 +1071,168 @@ class TestingBinReadAnalyzer:
                                    width=1280,
                                    height=1024)
 
-    def raw_plot_sh_clipping(self, control_ref):
+    # def raw_plot_sh_clipping(self, control_ref):
+    #     """"""
+    #     sh_clipping = self.parameters["summary_clip_file"]
+    #     read_counts = self.parameters["read_counts"]
+    #     # print(read_counts["chr"].value_counts())
+    #     clone_df = sh_clipping[sh_clipping["clone"] == "test1_alignSort"]
+    #     chr_col = []
+    #
+    #     for el in clone_df["read_id"]:
+    #         for chrom in read_counts["chr"].value_counts().index:
+    #             if str(chrom) in str(el):
+    #                 chr_col.append(chrom)
+    #
+    #     # chr_col = pd.Series(chr_col)
+    #     # chr_col.to_csv("chr_col.txt", sep="\t")
+    #
+    #     clone_df["chr"] = chr_col
+    #     chr1 = clone_df[clone_df["chr"] == "CH.chr1"]
+    #     chr1_pos = list(chr1["chrom_pos"])
+    #     # print(chr1_pos)
+    #     chr2 = clone_df[clone_df["chr"] == "CH.chr2"]
+    #     chr2_pos = list(chr2["chrom_pos"])
+    #     # print(chr2_pos)
+    #     chr3 = clone_df[clone_df["chr"] == "CH.chr3"]
+    #     chr3_pos = list(chr3["chrom_pos"])
+    #     # print(chr3_pos)
+    #
+    #     augmented_pos2 = []
+    #     augmented_pos3 = []
+    #     for pos in chr2_pos:
+    #         augmented_pos2.append(int(pos) + 21500000)
+    #
+    #     for pos in chr3_pos:
+    #         augmented_pos3.append(int(pos) + 39000000)
+    #
+    #     plot_pos = chr1_pos + augmented_pos2 + augmented_pos3
+    #     clone_df["plot_positions"] = plot_pos
+    #
+    #     clone_df.to_csv("chr1_augmented_counts_chr2_3.txt", sep="\t")
+    #     # print(clone_df)
+    #
+    #     occur_count = clone_df["plot_positions"].value_counts()  # counts how many times that position is occurred
+    #     # for different reads
+    #     index_count = list(occur_count.index)
+    #     count_df = pd.DataFrame({"plot_positions": index_count, "counts": occur_count})
+    #     clone_df_counts = pd.merge(clone_df, count_df, on="plot_positions")
+    #     print(clone_df_counts)
+    #     # occur_count.to_csv("counts_repeat_pos.txt", sep="\t")
+    #     clone_df_counts.to_csv("correct_counts_pos.txt", sep="\t")
+    #
+    #     # print(occur_count)
+    #     pos = clone_df_counts["plot_positions"]
+    #     hover_pos = clone_df_counts["chrom_pos"]
+    #     fig = go.Figure()
+    #     # Here I changed the pop-up information on the plot, writing the exact position of the read on the chromosome,
+    #     # instead the position in the entire genome = x-axis
+    #     fig.add_trace(go.Scatter(x=pos,
+    #                              y=clone_df_counts["counts"],
+    #                              hovertext=hover_pos,
+    #                              hovertemplate=
+    #                              "<b>Chrom_position</b>: %{hovertext:,}" + "<br><b>Genome_position</b>: %{x:,}",
+    #                              hoverinfo="text",
+    #                              mode="markers",
+    #                              name="test_1"
+    #                              ))
+    #
+    #     self.plot_background(fig)
+    #     fig.update_xaxes(title_text="Genome Length")
+    #     fig.update_yaxes(title_text="Count Repeated Clip Positions")
+    #     fig.update_layout(title="Soft_Hard Clipped Read Positions - "
+    #                             "Bin Size: " + str(self.bin_size))
+    #     fig.show()
+
+    # def plot_sh_clipping(self, control_ref, saving_folder):
+    #     """"""
+    #     sh_clipping = self.parameters["summary_clip_file"]
+    #     read_counts = self.parameters["read_counts"]
+    #     chromosomes = sh_clipping["chr"].value_counts().index
+    #     genome_pos = []
+    #     start = 0
+    #
+    #     clone_clipping = sh_clipping[sh_clipping["clone"] != control_ref]
+    #     for chrom in chromosomes:
+    #         bin_number = read_counts["chr"].value_counts()[chrom]
+    #         single_df = sh_clipping[sh_clipping["chr"] == chrom]
+    #         single_df_clone = single_df[single_df["clone"] != control_ref]
+    #         aug_length = bin_number * self.parameters["bin_size"]
+    #         # aug_length = self.parameters["chrom_length"][chrom]
+    #         print(aug_length)
+    #         tmp_end = start + aug_length
+    #         print("tmp_end", tmp_end)
+    #         if chrom == chromosomes[0]:
+    #             genome_pos = list(single_df_clone["chrom_pos"])
+    #         else:
+    #             genome_pos += list(single_df_clone["chrom_pos"] + start)
+    #         start = tmp_end
+    #
+    #     # print(genome_pos)
+    #
+    #     clone_clipping["genome_pos"] = genome_pos
+    #     counts = pd.DataFrame({"genome_pos": clone_clipping["genome_pos"].value_counts().index,
+    #                            "read_rep": clone_clipping["genome_pos"].value_counts()})
+    #
+    #     clone_clipping_counts = pd.merge(clone_clipping, counts, on="genome_pos")
+    #     clone_clipping_counts.to_csv(saving_folder +
+    #                                  "clipped_reads_count_" +
+    #                                  clone_clipping["clone"].iloc[0] +
+    #                                  ".txt",
+    #                                  sep="\t")
+    #     # print(clone_clipping_counts)
+    #
+    #     pos = clone_clipping["genome_pos"]
+    #     rep = clone_clipping_counts["read_rep"]
+    #     hover_pos = clone_clipping["chrom_pos"]
+    #     fig = go.Figure()
+    #     # Here I changed the pop-up information on the plot, writing the exact position of the read on the chromosome,
+    #     # instead the position in the entire genome = x-axis
+    #     fig.add_trace(go.Scatter(x=pos,
+    #                              y=rep,
+    #                              hovertext=hover_pos,
+    #                              # for CONTROL
+    #                              # hovertemplate=
+    #                              # "<b>Chrom_position</b>: %{hovertext:,}" + "<br><b>Genome_position</b>: %{x:,}",
+    #                              hovertemplate=
+    #                              "<b>Chrom_position</b>: %{hovertext:,}" + "<br>%{y}",
+    #                              hoverinfo="text",
+    #                              mode="markers",
+    #                              name="test_1"
+    #                              ))
+    #
+    #     self.plot_background(fig)
+    #     fig.update_xaxes(title_text="Genome Length")
+    #     fig.update_yaxes(title_text="Count Repeated Clip Positions")
+    #     fig.update_layout(title=clone_clipping["clone"].iloc[0] + " - Soft_Hard Clipped Read Positions")
+    #     fig.show()
+    #     save_fig = fig.write_image(saving_folder + "clipped_reads_counts" + str(self.bin_size) + ".pdf",
+    #                                width=1280,
+    #                                height=1024)
+
+    def plot_filtered_reads(self, control_ref, saving_folder):
         """"""
-        sh_clipping = self.parameters["summary_clip_file"]
         read_counts = self.parameters["read_counts"]
-        # print(read_counts["chr"].value_counts())
-        clone_df = sh_clipping[sh_clipping["clone"] == "test1_alignSort"]
-        chr_col = []
+        chromosomes = read_counts["chr"].value_counts().index
 
-        for el in clone_df["read_id"]:
-            for chrom in read_counts["chr"].value_counts().index:
-                if str(chrom) in str(el):
-                    chr_col.append(chrom)
-
-        # chr_col = pd.Series(chr_col)
-        # chr_col.to_csv("chr_col.txt", sep="\t")
-
-        clone_df["chr"] = chr_col
-        chr1 = clone_df[clone_df["chr"] == "CH.chr1"]
-        chr1_pos = list(chr1["chrom_pos"])
-        # print(chr1_pos)
-        chr2 = clone_df[clone_df["chr"] == "CH.chr2"]
-        chr2_pos = list(chr2["chrom_pos"])
-        # print(chr2_pos)
-        chr3 = clone_df[clone_df["chr"] == "CH.chr3"]
-        chr3_pos = list(chr3["chrom_pos"])
-        # print(chr3_pos)
-
-        augmented_pos2 = []
-        augmented_pos3 = []
-        for pos in chr2_pos:
-            augmented_pos2.append(int(pos) + 21500000)
-
-        for pos in chr3_pos:
-            augmented_pos3.append(int(pos) + 39000000)
-
-        plot_pos = chr1_pos + augmented_pos2 + augmented_pos3
-        clone_df["plot_positions"] = plot_pos
-
-        clone_df.to_csv("chr1_augmented_counts_chr2_3.txt", sep="\t")
-        # print(clone_df)
-
-        occur_count = clone_df["plot_positions"].value_counts()  # counts how many times that position is occurred
-        # for different reads
-        index_count = list(occur_count.index)
-        count_df = pd.DataFrame({"plot_positions": index_count, "counts": occur_count})
-        clone_df_counts = pd.merge(clone_df, count_df, on="plot_positions")
-        print(clone_df_counts)
-        # occur_count.to_csv("counts_repeat_pos.txt", sep="\t")
-        clone_df_counts.to_csv("correct_counts_pos.txt", sep="\t")
-
-        # print(occur_count)
-        pos = clone_df_counts["plot_positions"]
-        hover_pos = clone_df_counts["chrom_pos"]
         fig = go.Figure()
-        # Here I changed the pop-up information on the plot, writing the exact position of the read on the chromosome,
-        # instead the position in the entire genome = x-axis
-        fig.add_trace(go.Scatter(x=pos,
-                                 y=clone_df_counts["counts"],
-                                 hovertext=hover_pos,
-                                 hovertemplate=
-                                 "<b>Chrom_position</b>: %{hovertext:,}" + "<br><b>Genome_position</b>: %{x:,}",
-                                 hoverinfo="text",
-                                 mode="markers",
-                                 name="test_1"
-                                 ))
-
+        for col in read_counts:
+            if "cig_filt" in col and col[:col.find("cig_filt")] != control_ref:
+                filtered = read_counts[col]
+                hover_pos = read_counts["bin"] * self.bin_size
+                fig.add_trace(go.Scatter(x=list(filtered.index * self.bin_size),
+                                         y=filtered,
+                                         hovertext=hover_pos,
+                                         hovertemplate=
+                                         "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
+                                         hoverinfo="text",
+                                         mode='lines+markers',
+                                         name=col))
         self.plot_background(fig)
         fig.update_xaxes(title_text="Genome Length")
-        fig.update_yaxes(title_text="Count Repeated Clip Positions")
-        fig.update_layout(title="Soft_Hard Clipped Read Positions - "
-                                "Bin Size: " + str(self.bin_size))
-        fig.show()
-
-    def plot_sh_clipping(self, control_ref, saving_folder):
-        """"""
-        sh_clipping = self.parameters["summary_clip_file"]
-        read_counts = self.parameters["read_counts"]
-        chromosomes = sh_clipping["chr"].value_counts().index
-        genome_pos = []
-        start = 0
-
-        clone_clipping = sh_clipping[sh_clipping["clone"] != control_ref]
-        for chrom in chromosomes:
-            bin_number = read_counts["chr"].value_counts()[chrom]
-            single_df = sh_clipping[sh_clipping["chr"] == chrom]
-            single_df_clone = single_df[single_df["clone"] != control_ref]
-            aug_length = bin_number * self.parameters["bin_size"]
-            # aug_length = self.parameters["chrom_length"][chrom]
-            print(aug_length)
-            tmp_end = start + aug_length
-            print("tmp_end", tmp_end)
-            if chrom == chromosomes[0]:
-                genome_pos = list(single_df_clone["chrom_pos"])
-            else:
-                genome_pos += list(single_df_clone["chrom_pos"] + start)
-            start = tmp_end
-
-        # print(genome_pos)
-
-        clone_clipping["genome_pos"] = genome_pos
-        counts = pd.DataFrame({"genome_pos": clone_clipping["genome_pos"].value_counts().index,
-                               "read_rep": clone_clipping["genome_pos"].value_counts()})
-
-        clone_clipping_counts = pd.merge(clone_clipping, counts, on="genome_pos")
-        clone_clipping_counts.to_csv(saving_folder +
-                                     "clipped_reads_count_" +
-                                     clone_clipping["clone"].iloc[0] +
-                                     ".txt",
-                                     sep="\t")
-        # print(clone_clipping_counts)
-
-        pos = clone_clipping["genome_pos"]
-        rep = clone_clipping_counts["read_rep"]
-        hover_pos = clone_clipping["chrom_pos"]
-        fig = go.Figure()
-        # Here I changed the pop-up information on the plot, writing the exact position of the read on the chromosome,
-        # instead the position in the entire genome = x-axis
-        fig.add_trace(go.Scatter(x=pos,
-                                 y=rep,
-                                 hovertext=hover_pos,
-                                 # for CONTROL
-                                 # hovertemplate=
-                                 # "<b>Chrom_position</b>: %{hovertext:,}" + "<br><b>Genome_position</b>: %{x:,}",
-                                 hovertemplate=
-                                 "<b>Chrom_position</b>: %{hovertext:,}" + "<br>%{y}",
-                                 hoverinfo="text",
-                                 mode="markers",
-                                 name="test_1"
-                                 ))
-
-        self.plot_background(fig)
-        fig.update_xaxes(title_text="Genome Length")
-        fig.update_yaxes(title_text="Count Repeated Clip Positions")
-        fig.update_layout(title=clone_clipping["clone"].iloc[0] + " - Soft_Hard Clipped Read Positions")
+        fig.update_yaxes(title_text="Count Clipped Reads")
+        if self.cigar_filter == ["S", "H"]:
+            fig.update_layout(title="Soft_Hard Clipped Read Counts - Bin_size: " + str(self.bin_size))
         fig.show()
         save_fig = fig.write_image(saving_folder + "clipped_reads_counts" + str(self.bin_size) + ".pdf",
                                    width=1280,
@@ -1222,9 +1252,9 @@ if __name__ == "__main__":
                         help="The length of the segments that divide the chromosomes equally")
 
     parser.add_argument("-f", "--folder",
-                        type=str,
-                        default="./",
-                        help="The path to the folder in which are situated the files to be analyzed (.bam)")
+                        nargs="+",
+                        default=["./"],
+                        help="The path to the folder in which are located the files to be analyzed (.bam)")
 
     parser.add_argument("-fl", "--flag_list",
                         nargs="+",
@@ -1270,18 +1300,16 @@ if __name__ == "__main__":
                         name as the column name in the read_counts data structure, thus the name of the alignment 
                         file used as baseline without the ".bam" string""")
 
-    parser.add_argument("-c", "--cigar_filter",
+    parser.add_argument("-c", "--cigar",
                         action="store_true",
-                        default=None,
-                        help="""If specified, the reads mapped with soft and hard clipping (S and H), are taken out 
-                            form the read counts; it returns a data frame with same structure of the default one""")
+                        help="If specified, it allows the application of all the filters on cigar_string, per read")
 
-    parser.add_argument("-cf", "--other_cigar_filters",
-                        type=str,
+    parser.add_argument("-cf", "--cigar_filter",
                         nargs="+",
-                        default=[],
-                        help="""An additional parameter to exclude other reads from the count, on the bases of other 
-                            information in their cigar, like indels.\n(Specify it like e.g. "I" "D")""")
+                        default=["S", "H"],
+                        help="""If specified, the reads mapped with soft and hard clipping (S and H) by default, are taken out 
+                            form the read counts; it returns a data frame with same structure of the default one.
+                            \n(Specify other filters like e.g. "I" "D")""")
 
     parser.add_argument("-fc", "--fold_change",
                         type=float,
@@ -1313,13 +1341,28 @@ if __name__ == "__main__":
     else:
         flags = args.flag_list
 
-    analyzer = TestingBinReadAnalyzer(args.folder, args.bin_size, args.reference, flags, args.output_pickle)
-    analyzer.load_data(other_cigar_filters=args.other_cigar_filters,
+    if args.folder != dict_args["folder"]:
+        folders = dict_args["folder"] + args.folder
+    else:
+        folder = args.folder
+
+    analyzer = TestingBinReadAnalyzer(args.folder,
+                                      args.bin_size,
+                                      args.reference,
+                                      flags,
+                                      args.cigar_filter,
+                                      args.output_pickle)
+
+    analyzer.load_data(cigar=args.cigar,
                        cigar_filter=args.cigar_filter,
                        reference=args.reference,
                        read_info=args.read_info,
                        unmapped=args.unmapped,
                        verbose=True)
+
+    analyzer.normalize_bins()
+    analyzer.plot_counts_distributions(args.saving_folder, args.cigar_filter)
+    exit(1)
 
     if not os.path.exists(args.saving_folder):
         os.mkdir(args.saving_folder)
@@ -1328,37 +1371,8 @@ if __name__ == "__main__":
     analyzer.get_fold_change(args.saving_folder, args.control_name)
     analyzer.get_sig_pos(args.fold_change, args.p_value)
     analyzer.plot_sig_data(args.saving_folder, args.fold_change, args.p_value, args.cigar_filter)
-    analyzer.plot_sh_clipping(args.control_name, args.saving_folder)
+    analyzer.plot_filtered_reads(args.control_name, args.saving_folder)
 
-    exit(1)
-
-    analyzer.normalize_bins()
-    # analyzer.get_fold_change(args.control_name)
-    fc = analyzer.get_fold_change(args.control_name)
-    analyzer.get_sig_pos(args.fold_change, args.p_value)
-    analyzer.get_no_sig_pos(args.fold_change, args.p_value)
-
-    counts = params["read_counts"]
-    start = 15309000 // args.bin_size
-    # print(start)
-    end = 15309706 // args.bin_size
-    # print(end)
-
-    data = counts[counts["chr"] == "CH.chr1"]
-    data = data[data['bin'] >= start]
-    data = data[data['bin'] <= end]
-    print(data)
-    # fc_start_filt = data["index"].iloc[0]
-    # fc_end_filt = data["index"].iloc[-1]
-
-    # for clone in fc:
-    #     print(fc[clone].iloc[fc_start_filt:fc_end_filt + 1])
-
-    # exit(1)
-
-
-
-    analyzer.plot_counts_distributions(args.saving_folder, args.cigar_filter)
 
     if args.chromosome and args.sample:
         analyzer.plot_chrom_sample(args.saving_folder, args.reference, args.chromosome, args.sample, args.cigar_filter,
@@ -1408,3 +1422,29 @@ if __name__ == "__main__":
     #     analyzer.plot_sig_data(param["read_counts"], param["bin_size"])
     # analyzer.plot_background(param["read_counts"])
     # ------------------------------------------------------------------------------
+    # analyzer.plot_sh_clipping(args.control_name, args.saving_folder)
+    #
+    #
+    # analyzer.normalize_bins()
+    # # analyzer.get_fold_change(args.control_name)
+    # fc = analyzer.get_fold_change(args.control_name)
+    # analyzer.get_sig_pos(args.fold_change, args.p_value)
+    # analyzer.get_no_sig_pos(args.fold_change, args.p_value)
+    #
+    # counts = params["read_counts"]
+    # start = 15309000 // args.bin_size
+    # # print(start)
+    # end = 15309706 // args.bin_size
+    # # print(end)
+    #
+    # data = counts[counts["chr"] == "CH.chr1"]
+    # data = data[data['bin'] >= start]
+    # data = data[data['bin'] <= end]
+    # print(data)
+    # # fc_start_filt = data["index"].iloc[0]
+    # # fc_end_filt = data["index"].iloc[-1]
+    #
+    # # for clone in fc:
+    # #     print(fc[clone].iloc[fc_start_filt:fc_end_filt + 1])
+    #
+    # # exit(1)
