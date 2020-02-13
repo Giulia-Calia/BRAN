@@ -81,7 +81,7 @@ class TestingBinReadAnalyzer:
         self.norm = None
         self.log_norm = None
         self.fold_change = None
-        self.sig_fc = None
+        self.empty = None
 
     def set_parameters(self, param):
         self.parameters = param
@@ -95,8 +95,11 @@ class TestingBinReadAnalyzer:
     def set_fold_change(self, diff):
         self.fold_change = diff
 
-    def set_sig_fc(self, fc):
-        self.sig_fc = fc
+    def set_empty(self, empty):
+        self.empty = empty
+
+    def get_empty(self):
+        return self.empty
 
     def load_data(self, cigar, cigar_filter=None, reference=None, read_info=None, unmapped=None,
                   verbose=False):
@@ -147,7 +150,7 @@ class TestingBinReadAnalyzer:
                     parameters = counter._load_pickle(file)
                     if parameters["bin_size"] == self.bin_size and \
                             parameters["flags"] == self.flags and \
-                            all(el in parameters["bam"] for el in bam_files) and \
+                            all(el in bam_files for el in parameters["bam"]) and \
                             parameters["cigar"] == cigar and \
                             parameters["cigar_filter"] == cigar_filter and \
                             parameters["unmapped"] == unmapped and \
@@ -528,16 +531,17 @@ class TestingBinReadAnalyzer:
         fig_all_norm.update_traces(opacity=0.75)
         fig_all_norm.update_yaxes(title_text="Normalized_Counts")
 
-        for i in range(0, self.norm.ncol):
+        for col in self.norm:
             # fig_all_norm.add_trace(go.Histogram(x=list(self.norm.rx(True, i + 1)),
             #                                     name=str(self.norm.colnames[i])))
             # fig_all_norm.add_trace(go.Box(y=list(self.norm.rx(True, i + 1)),
             #                               boxpoints=False,
             #                               name=str(self.norm.colnames[i])))
-            fig_all_norm.add_trace(go.Violin(y=list(self.norm.rx(True, i + 1)),
-                                             box_visible=True,
-                                             meanline_visible=True,
-                                             name=str(self.norm.colnames[i])))
+            if col != "chr" and col != "bin":
+                fig_all_norm.add_trace(go.Violin(y=self.norm[col],
+                                                 box_visible=True,
+                                                 meanline_visible=True,
+                                                 name=col))
 
 
         # # --plot_log_scaled_norm_counts_distribution--
@@ -546,13 +550,14 @@ class TestingBinReadAnalyzer:
         fig_log_norm.update_traces(opacity=0.75)
         fig_log_norm.update_yaxes(title_text="Log_Normalized_Counts")
 
-        for i in range(0, self.log_norm.ncol):
+        for col in self.log_norm:
             # fig_log_norm.add_trace(go.Box(x=list(self.log_norm.rx(True, i + 1)),
             #                               name=str(self.log_norm.colnames[i])))
-            fig_log_norm.add_trace(go.Violin(y=list(self.log_norm.rx(True, i + 1)),
-                                             box_visible=True,
-                                             meanline_visible=True,
-                                             name=str(self.log_norm.colnames[i])))
+            if col != "chr" and col != "bin":
+                fig_log_norm.add_trace(go.Violin(y=self.log_norm[col],
+                                                 box_visible=True,
+                                                 meanline_visible=True,
+                                                 name=col))
 
         # fig_log_norm = go.Figure()
         # fig_log_norm.update_xaxes(title_text="Log-scaled_Normalized_Counts")
@@ -1127,7 +1132,7 @@ class TestingBinReadAnalyzer:
     def plot_fold_change_chr_sample(self, pairwise, fc, chrom, sample, control_name, saving_folder):
         """"""
         if pairwise:
-            print(control_name)
+            empty_significant = []
             fig = go.Figure()
 
             fig.update_xaxes(title_text="Chromosome_Position")
@@ -1144,6 +1149,7 @@ class TestingBinReadAnalyzer:
                     sig_data_pos = single_chrom[["chr", "bin", col]][single_chrom[col] > fc]
                     sig_data_neg = single_chrom[["chr", "bin", col]][single_chrom[col] < -fc]
                     sig_data = pd.concat([sig_data_pos, sig_data_neg])
+                    empty_significant.append(sig_data.empty)
                     not_sig_data = single_chrom[["chr", "bin", col]].drop(list(sig_data_pos.index) + list(sig_data_neg.index))
 
                     hover_pos_sig = sig_data["bin"] * self.bin_size
@@ -1183,6 +1189,9 @@ class TestingBinReadAnalyzer:
 
             fig.show()
 
+            self.set_empty(empty_significant)
+            return self.empty
+
         else:
             print("""ATTENTION: if parameter '-pw' not give, its impossible to retrieve graphical information 
                   on single sample fold-change. \nPlease TRY AGAIN specifying '-pw' or '--pairwise' in command line""")
@@ -1200,13 +1209,15 @@ class TestingBinReadAnalyzer:
                 c_name = c
         single_chrom = self.fold_change[self.fold_change["chr"] == c_name]
         if pairwise:
+            empty_significant = []
             for col in single_chrom:
                 if col != "chr" and col != "bin":
                     sig_data_pos = single_chrom[["chr", "bin", col]][single_chrom[col] > fc]
                     sig_data_neg = single_chrom[["chr", "bin", col]][single_chrom[col] < -fc]
                     sig_data = pd.concat([sig_data_pos, sig_data_neg])
+                    empty_significant.append(sig_data.empty)
                     not_sig_data = single_chrom[["chr", "bin", col]].drop(list(sig_data_pos.index) + list(sig_data_neg.index))
-                    print(sig_data)
+
                     hover_pos_sig = sig_data["bin"] * self.bin_size
                     hover_pos_no_sig = not_sig_data["bin"] * self.bin_size
 
@@ -1242,12 +1253,17 @@ class TestingBinReadAnalyzer:
 
             fig.show()
 
+            self.set_empty(empty_significant)
+            return self.empty
+
         else:
+            empty_significant = []
             for col in list(single_chrom.columns):
                 if col != "bin" and col != "chr":
                     sig_data_pos = single_chrom[single_chrom[col] > fc]
                     sig_data_neg = single_chrom[single_chrom[col] < -fc]
                     sig_data = pd.concat([sig_data_pos, sig_data_neg])
+                    empty_significant.append(sig_data.empty)
                     not_sig_data = single_chrom.drop(list(sig_data_pos.index) + list(sig_data_neg.index))
                     # print(sig_data)
                     # print(self.fold_change)
@@ -1285,9 +1301,13 @@ class TestingBinReadAnalyzer:
 
             fig.show()
 
+            self.set_empty(empty_significant)
+            return self.empty
+
     def plot_fold_change_sample(self, pairwise, fc, sample, control_name, saving_folder):
         """"""
         if pairwise:
+            empty_significant = []
             fig = go.Figure()
 
             fig.update_xaxes(title_text="Genome_Position")
@@ -1298,6 +1318,7 @@ class TestingBinReadAnalyzer:
                     sig_data_pos = self.fold_change[["chr", "bin", col]][self.fold_change[col] > fc]
                     sig_data_neg = self.fold_change[["chr", "bin", col]][self.fold_change[col] < -fc]
                     sig_data = pd.concat([sig_data_pos, sig_data_neg])
+                    empty_significant.append(sig_data.empty)
                     not_sig_data = self.fold_change[["chr", "bin", col]].drop(list(sig_data_pos.index) +
                                                                               list(sig_data_neg.index))
 
@@ -1337,6 +1358,9 @@ class TestingBinReadAnalyzer:
             self.add_threshold_fc(fig, fc)
             self.plot_background(fig)
             fig.show()
+
+            self.set_empty(empty_significant)
+            return self.empty
 
         else:
             print("""ATTENTION: if parameter '-pw' not give, its impossible to retrieve graphical information 
@@ -1422,11 +1446,13 @@ class TestingBinReadAnalyzer:
 
         # print(self.fold_change[self.fold_change > 1.5])
         if pairwise:
+            empty_significant = []
             for col in self.fold_change:
                 if col != "bin" and col != "chr":
                     sig_data_pos = self.fold_change[["chr", "bin", col]][self.fold_change[col] > fc]
                     sig_data_neg = self.fold_change[["chr", "bin", col]][self.fold_change[col] < -fc]
                     sig_data = pd.concat([sig_data_pos, sig_data_neg])
+                    empty_significant.append(sig_data.empty)
                     not_sig_data = self.fold_change[["chr", "bin", col]].drop(list(sig_data_pos.index) +
                                                                               list(sig_data_neg.index))
 
@@ -1461,12 +1487,22 @@ class TestingBinReadAnalyzer:
                     #                            width=1280,
                     #                            height=1024)
 
+            self.add_threshold_fc(fig, fc)
+            self.plot_background(fig)
+
+            fig.show()
+
+            self.set_empty(empty_significant)
+            return self.empty
+
         else:
+            empty_significant = []
             for col in list(self.fold_change.columns):
                 if col != "bin" and col != "chr":
                     sig_data_pos = self.fold_change[self.fold_change[col] > fc]
                     sig_data_neg = self.fold_change[self.fold_change[col] < -fc]
                     sig_data = pd.concat([sig_data_pos, sig_data_neg])
+                    empty_significant.append(sig_data.empty)
                     not_sig_data = self.fold_change.drop(list(sig_data_pos.index) + list(sig_data_neg.index))
                     # print(sig_data)
                     # print(self.fold_change)
@@ -1500,11 +1536,13 @@ class TestingBinReadAnalyzer:
                                            ".pdf",
                                            width=1280,
                                            height=1024)
+            self.add_threshold_fc(fig, fc)
+            self.plot_background(fig)
 
-        self.add_threshold_fc(fig, fc)
-        self.plot_background(fig)
+            fig.show()
 
-        fig.show()
+            self.set_empty(empty_significant)
+            return self.empty
 
     # def raw_plot_sh_clipping(self, control_ref):
     #     """"""
@@ -1799,8 +1837,50 @@ if __name__ == "__main__":
                        unmapped=args.unmapped,
                        verbose=True)
 
+    if not os.path.exists(args.saving_folder):
+        os.mkdir(args.saving_folder)
+
     analyzer.normalize_bins()
+    # analyzer.plot_counts_distributions(args.saving_folder)
     analyzer.get_fold_change(args.control_name, args.pairwise)
+
+    if args.chromosome and args.sample:
+        analyzer.plot_chrom_sample(args.saving_folder, args.reference, args.chromosome, args.sample, args.Ns_count)
+        analyzer.plot_norm_data_chr_sample(args.saving_folder, args.reference,
+                                           args.chromosome, args.sample, args.Ns_count)
+        analyzer.plot_fold_change_chr_sample(args.pairwise, args.fold_change, args.chromosome,
+                                             args.sample, args.control_name, args.saving_folder)
+        # print(analyzer.get_empty())
+        if any(analyzer.get_empty()):
+            analyzer.plot_filtered_reads(args.control_name, args.saving_folder)
+
+    elif args.chromosome:
+        analyzer.plot_chromosome(args.saving_folder, args.reference, args.chromosome, args.Ns_count)
+        analyzer.plot_norm_data_chr(args.saving_folder, args.reference, args.chromosome, args.Ns_count)
+        analyzer.plot_fold_change_chr(args.pairwise, args.fold_change, args.chromosome, args.saving_folder)
+        # print(analyzer.get_empty())
+        if any(analyzer.get_empty()):
+            analyzer.plot_filtered_reads(args.control_name, args.saving_folder)
+
+    elif args.sample:
+        analyzer.plot_sample(args.saving_folder, args.reference, args.sample, args.Ns_count)
+        analyzer.plot_norm_data_sample(args.saving_folder, args.reference, args.sample, args.Ns_count)
+        analyzer.plot_fold_change_sample(args.pairwise, args.fold_change, args.sample,
+                                         args.control_name, args.saving_folder)
+        # print(analyzer.get_empty())
+        if any(analyzer.get_empty()):
+            analyzer.plot_filtered_reads(args.control_name, args.saving_folder)
+    else:
+        analyzer.plot_all(args.saving_folder, args.reference, args.Ns_count)
+        analyzer.plot_norm_data_all(args.saving_folder, args.reference, args.Ns_count)
+        analyzer.plot_fold_change(args.fold_change, args.saving_folder, args.pairwise)
+        # print(analyzer.get_empty())
+        if any(analyzer.get_empty()):
+            analyzer.plot_filtered_reads(args.control_name, args.saving_folder)
+
+
+
+    # ----------------------------testing_each_plot---------------------------------------------------------------------
     # analyzer.plot_counts_distributions(args.saving_folder, args.cigar_filter)
     # analyzer.plot_all(args.saving_folder, args.reference, args.cigar)
     # analyzer.plot_norm_data_all(args.saving_folder, args.reference)
@@ -1808,48 +1888,19 @@ if __name__ == "__main__":
     #                            args.Ns_count)
     # analyzer.plot_chromosome(args.saving_folder, args.reference, args.chromosome, args.cigar, args.Ns_count)
     # analyzer.plot_sample(args.saving_folder, args.reference, args.sample, args.cigar, args.Ns_count)
-    # analyzer.plot_norm_data_chr_sample(args.saving_folder, args.reference, args.chromosome, args.sample, args.Ns_count)
+    # analyzer.plot_norm_data_chr_sample(args.saving_folder, args.reference, args.chromosome,
+    # args.sample, args.Ns_count)
     # analyzer.plot_norm_data_chr(args.saving_folder, args.reference, args.chromosome, args.Ns_count)
     # analyzer.plot_norm_data_sample(args.saving_folder, args.reference, args.sample, args.Ns_count)
     # analyzer.plot_fold_change(args.fold_change, args.saving_folder, args.pairwise)
-    # analyzer.plot_fold_change_chr_sample(args.pairwise, args.fold_change, args.chromosome, args.sample, args.control_name, args.saving_folder)
+    # analyzer.plot_fold_change_chr_sample(args.pairwise, args.fold_change, args.chromosome,
+    # args.sample, args.control_name, args.saving_folder)
     # analyzer.plot_fold_change_chr(args.pairwise, args.fold_change, args.chromosome, args.saving_folder)
-    # analyzer.plot_fold_change_sample(args.pairwise, args.fold_change, args.sample, args.control_name, args.saving_folder)
-    exit(1)
+    # analyzer.plot_fold_change_sample(args.pairwise, args.fold_change, args.sample,
+    # args.control_name, args.saving_folder)
+    # exit(1)
 
-    if not os.path.exists(args.saving_folder):
-        os.mkdir(args.saving_folder)
-
-    analyzer.normalize_bins()
-    analyzer.get_fold_change(args.control_name)
-    analyzer.get_sig_pos(args.fold_change, args.p_value)
-    analyzer.plot_sig_data(args.saving_folder, args.fold_change, args.p_value, args.cigar_filter)
-    analyzer.plot_filtered_reads(args.control_name, args.saving_folder)
-
-    if args.chromosome and args.sample:
-        analyzer.plot_chrom_sample(args.saving_folder, args.reference, args.chromosome, args.sample, args.cigar_filter,
-                                   args.Ns_count)
-        analyzer.plot_norm_data_chr_sample(args.saving_folder, args.reference, args.chromosome, args.sample,
-                                           args.cigar_filter,
-                                           args.Ns_count)
-
-    elif args.chromosome:
-        analyzer.plot_chromosome(args.saving_folder, args.reference, args.chromosome, args.cigar_filter, args.Ns_count)
-        analyzer.plot_norm_data_chr(args.saving_folder, args.reference, args.chromosome, args.cigar_filter,
-                                    args.Ns_count)
-
-    elif args.sample:
-        analyzer.plot_sample(args.saving_folder, args.reference, args.sample, args.cigar_filter, args.Ns_count)
-        analyzer.plot_norm_data_sample(args.saving_folder, args.reference, args.sample, args.cigar_filter,
-                                       args.Ns_count)
-
-    else:
-        analyzer.plot_all(args.saving_folder, args.reference, args.cigar_filter, args.Ns_count)
-        analyzer.plot_norm_data_all(args.saving_folder, args.reference, args.cigar_filter, args.Ns_count)
-
-    # analyzer.plot_sig_data_chr_sample(args.saving_folder, args.fold_change, args.p_value, args.cigar_filter, args.chromosome, args.sample)
-
-    # ---------------------------complete_file_pickle--------------------------------
+    # ---------------------------complete_file_pickle-------------------------------------------------------------------
     # with open("../all_samples_pickles/BRAN250000_df.p", "rb") as input_param:
     #     param = pickle.load(input_param)
     #     chr6 = param["read_counts"][param["read_counts"]["chr"] == "CH.chr6"]
@@ -1859,7 +1910,8 @@ if __name__ == "__main__":
     #     chr13 = param["read_counts"][param["read_counts"]["chr"] == "CH.chr13"]
     #
     #     # print(chr6[["Ch15_3_1_ref_IlluminaPE_aligns_Primary", "bin"]])
-    #     print("all\n", param["read_counts"][["Ch15_3_1_ref_IlluminaPE_aligns_Primary", "Ch15_2_1_ref_IlluminaPE_aligns_Primary"]])
+    #     print("all\n", param["read_counts"][["Ch15_3_1_ref_IlluminaPE_aligns_Primary",
+    #     "Ch15_2_1_ref_IlluminaPE_aligns_Primary"]])
     #     print("chr6\n", chr6[["Ch15_3_1_ref_IlluminaPE_aligns_Primary", "Ch15_2_1_ref_IlluminaPE_aligns_Primary"]])
     #     print("chr1\n", chr1[["Ch15_3_1_ref_IlluminaPE_aligns_Primary", "Ch15_2_1_ref_IlluminaPE_aligns_Primary"]])
     #     print("chr19\n", chr19[["Ch15_3_1_ref_IlluminaPE_aligns_Primary", "Ch15_2_1_ref_IlluminaPE_aligns_Primary"]])
@@ -1873,7 +1925,8 @@ if __name__ == "__main__":
     #     analyzer.get_sig_pos(param["read_counts"], param["bin_size"])
     #     analyzer.plot_sig_data(param["read_counts"], param["bin_size"])
     # analyzer.plot_background(param["read_counts"])
-    # ------------------------------------------------------------------------------
+
+    # ----------------------------------tries---------------------------------------------------------------------------
     # analyzer.plot_sh_clipping(args.control_name, args.saving_folder)
     #
     #
