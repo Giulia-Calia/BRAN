@@ -190,7 +190,7 @@ class TestingBinReadCounter:
 
         for f in self.folder:
             dir_list = os.listdir(f)
-            print("\n", f)
+            print("\n\n", f)
             for el in dir_list:
                 if el.endswith(".bam"):
                     bam_file = pysam.AlignmentFile(f + el, "rb")
@@ -282,24 +282,24 @@ class TestingBinReadCounter:
 
             # preparing for final DataFrame concatenation
             # index_column_df = pd.DataFrame({"index": index_column})
-            chrom_column_df = pd.DataFrame({"chr": chrom_column[list(chrom_column.keys())[0]]})
-            bin_column_df = pd.DataFrame({"bin": bin_column[list(bin_column.keys())[0]]})
+        chrom_column_df = pd.DataFrame({"chr": chrom_column[list(chrom_column.keys())[0]]})
+        bin_column_df = pd.DataFrame({"bin": bin_column[list(bin_column.keys())[0]]})
 
-            read_counts_concat_df = pd.DataFrame(read_counts_concat)
+        read_counts_concat_df = pd.DataFrame(read_counts_concat)
 
-            read_count_df = pd.concat([chrom_column_df, bin_column_df, read_counts_concat_df], axis=1)
-            # print(read_count_df)
-            # df_filtered = pd.DataFrame(cigar_filtered)
-            #
-            self.set_read_counts(read_count_df)
-            # print(self.read_counts)
-            self.set_unmapped(unmapped_count)
-            # print(self.unmapped)
-            # self.set_filtered(df_filtered)
-            # # print(self.filtered)
-            self.set_chrom_length(chrom_length)
-            # print(self.chrom_length)
-            return self.read_counts, self.unmapped, self.chrom_length
+        read_count_df = pd.concat([chrom_column_df, bin_column_df, read_counts_concat_df], axis=1)
+        # print(read_count_df)
+        # df_filtered = pd.DataFrame(cigar_filtered)
+        #
+        self.set_read_counts(read_count_df)
+        # print(self.read_counts)
+        self.set_unmapped(unmapped_count)
+        # print(self.unmapped)
+        # self.set_filtered(df_filtered)
+        # # print(self.filtered)
+        self.set_chrom_length(chrom_length)
+        # print(self.chrom_length)
+        return self.read_counts, self.unmapped, self.chrom_length
 
     # def _load_cigar_read_counts(self, other_cigar_filters, cigar_filter=False):
     #     # the progress bar is used in this method, as in those after this, just
@@ -907,15 +907,23 @@ if __name__ == "__main__":
 
     if args.folder != dict_args["folder"]:
         folders = dict_args["folder"] + args.folder
+        print(folders)
+        counter = TestingBinReadCounter(folders,
+                                        args.bin_size,
+                                        flags,
+                                        args.reference,
+                                        args.cigar_filter,
+                                        args.output_pickle)
     else:
         folder = args.folder
+        counter = TestingBinReadCounter(folder,
+                                        args.bin_size,
+                                        flags,
+                                        args.reference,
+                                        args.cigar_filter,
+                                        args.output_pickle)
 
-    counter = TestingBinReadCounter(args.folder,
-                                    args.bin_size,
-                                    flags,
-                                    args.reference,
-                                    args.cigar_filter,
-                                    args.output_pickle)
+
 
     # print(counter._load_reads(args.cigar, args.unmapped))
 
