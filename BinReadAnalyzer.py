@@ -171,8 +171,8 @@ class TestingBinReadAnalyzer:
                 except:
                     i += 1
                     continue
-        if verbose:
-            print("Other processes running at this moment: ", i)
+            if verbose:
+                print("Other processes running at this moment: ", i)
         if not found:
             # if not found, none of the pickle files in the current directory
             # have the same parameters of the actual running or a file pickle is not p
@@ -667,13 +667,13 @@ class TestingBinReadAnalyzer:
                           template=template,
                           legend_orientation="h")
 
-        fig.show()
-        save_fig = fig.write_image(saving_folder +
-                                   "scatter_all_counts_"
-                                   + str(self.bin_size) +
-                                   ".pdf",
-                                   width=1920,
-                                   height=1080)
+        # fig.show()
+#         save_fig = fig.write_image(saving_folder +
+#                                    "scatter_all_counts_"
+#                                    + str(self.bin_size) +
+#                                    ".pdf",
+#                                    width=1920,
+#                                    height=1080)
 
     def plot_norm_data_chr_sample(self, saving_folder, reference, chrom, sample, template, ns=False, fig=go.Figure()):  # , cigar
         """This method allows to obtain a scatter-plot of normalized_read_counts
@@ -872,11 +872,11 @@ class TestingBinReadAnalyzer:
                           legend_orientation="h")
 
         fig.show()
-        save_fig = fig.write_image(saving_folder + "scatter_norm_all_counts_" +
-                                   str(self.bin_size) +
-                                   ".pdf",
-                                   width=1920,
-                                   height=1080)
+        # save_fig = fig.write_image(saving_folder + "scatter_norm_all_counts_" +
+        #                            str(self.bin_size) +
+        #                            ".pdf",
+        #                            width=1920,
+        #                            height=1080)
 
     def plot_fold_change_chr_sample(self, pairwise, fc, chrom, sample, control_name, saving_folder):
         """"""
@@ -1144,32 +1144,31 @@ class TestingBinReadAnalyzer:
                                              hovertemplate=
                                              "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
                                              name=col))
-                    fig.add_trace(go.Scatter(x=list(not_sig_data.index * self.bin_size),
-                                             y=not_sig_data[col],
-                                             mode="markers",
-                                             marker=dict(size=5, color="rgb(176, 196, 222)"),
-                                             hovertext=hover_pos_no_sig,
-                                             hovertemplate=
-                                             "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                             legendgroup="group",
-                                             name=col))
+                    # fig.add_trace(go.Scatter(x=list(not_sig_data.index * self.bin_size),
+                    #                          y=not_sig_data[col],
+                    #                          mode="markers",
+                    #                          marker=dict(size=5, color="rgb(176, 196, 222)"),
+                    #                          hovertext=hover_pos_no_sig,
+                    #                          hovertemplate=
+                    #                          "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
+                    #                          legendgroup="group",
+                    #                          name=col))
 
                     fig.update_layout(title="Pairwise Fold Change - Each Clone vs Reference - "
                                             "Bin Size: " + str(self.bin_size) + " - Threshold_FC: " + str(fc),
                                       legend_orientation="h")
-
-                    save_fig = fig.write_image(saving_folder +
-                                               "pairwise_fold_change_" +
-                                               str(self.bin_size) +
-                                               ".pdf",
-                                               width=1920,
-                                               height=1080)
 
             self.add_threshold_fc(fig, fc)
             self.plot_background(fig)
 
             fig.show()
 
+            save_fig = fig.write_image(saving_folder +
+                                       "pairwise_fold_change_" +
+                                       str(self.bin_size) +
+                                       ".pdf",
+                                       width=1920,
+                                       height=1080)
             self.set_empty(empty_significant)
             return self.empty
 
@@ -1206,16 +1205,17 @@ class TestingBinReadAnalyzer:
                                             "Bin Size: " + str(self.bin_size) + " - Threshold_FC: " + str(fc),
                                       legend_orientation="h")
 
-                save_fig = fig.write_image(saving_folder +
-                                           "fold_change_" +
-                                           str(self.bin_size) +
-                                           ".pdf",
-                                           width=1920,
-                                           height=1080)
             self.add_threshold_fc(fig, fc)
             self.plot_background(fig)
 
-            fig.show()
+            # fig.show()
+
+            save_fig = fig.write_image(saving_folder +
+                                       "fold_change_" +
+                                       str(self.bin_size) +
+                                       ".pdf",
+                                       width=1920,
+                                       height=1080)
 
             self.set_empty(empty_significant)
             return self.empty
@@ -1275,7 +1275,7 @@ class TestingBinReadAnalyzer:
                                 "- Bin Size: " + str(self.bin_size))
 
         fig.update_traces(opacity=0.75)
-        fig.show()
+        # fig.show()
 
         save_fig = fig.write_image(saving_folder + "comparison_norm_clipped_reads_counts" + str(self.bin_size) + ".pdf",
                                    width=1920,
@@ -1284,8 +1284,6 @@ class TestingBinReadAnalyzer:
     def plot_filtered_reads(self, saving_folder):
         read_counts = self.parameters["read_counts"]
         fig = go.Figure()
-        fig.update_xaxes(title_text="Genome_Position")
-        fig.update_yaxes(title_text="Norm_Clipped_Read_counts")
 
         for col in read_counts:
             if "cig_filt" in col:  # and col[:col.find("cig_filt")] != control_ref:
@@ -1298,13 +1296,30 @@ class TestingBinReadAnalyzer:
                                          hoverinfo="text",
                                          mode="markers",
                                          name=col))
+                fig.update_xaxes(title_text="Genome_Position")
+                fig.update_yaxes(title_text="Norm_Clipped_Read_counts")
+                fig.update_layout(title="Norm_Clipped_Read_Counts - Bin Size: " + str(self.bin_size),
+                                  legend_orientation="h")
+
+        # for col in read_counts:
+        #     if "cig_filt" in col:  # and col[:col.find("cig_filt")] != control_ref:
+        #         hover_pos = read_counts["bin"] * self.bin_size
+        #         fig.add_trace(go.Scatter(x=list(read_counts[col].index * self.bin_size),
+        #                                  y=read_counts[col],
+        #                                  hovertext=hover_pos,
+        #                                  hovertemplate=
+        #                                  "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
+        #                                  hoverinfo="text",
+        #                                  mode="markers",
+        #                                  name=col))
+        #         fig.update_xaxes(title_text="Genome_Position")
+        #         fig.update_yaxes(title_text="Clipped_Read_counts")
+        #         fig.update_layout(title="Clipped_Read_Counts - Bin Size: " + str(self.bin_size),
+        #                           legend_orientation="h")
 
         self.plot_background(fig)
 
-        fig.update_layout(title="Norm_Clipped_Read_Counts - Bin Size: " + str(self.bin_size),
-                          legend_orientation="h")
-
-        fig.show()
+        # fig.show()
         save_fig = fig.write_image(saving_folder + "clipped_reads_counts" + str(self.bin_size) + ".pdf",
                                    width=1920,
                                    height=1080)
@@ -1362,7 +1377,7 @@ class TestingBinReadAnalyzer:
                           title_text="Proportion of Clipped Reads, Unmapped Reads and other Reads Counts - Bin Size: " +
                                      str(self.bin_size))
         fig.update_traces(opacity=0.6)
-        fig.show()
+        # fig.show()
         save_fig = fig.write_image(saving_folder + "bar_chart_proportion" + str(self.bin_size) + ".pdf",
                                    width=1920,
                                    height=1080)
@@ -1495,6 +1510,9 @@ if __name__ == "__main__":
 
     if not os.path.exists(args.saving_folder):
         os.mkdir(args.saving_folder)
+
+    print(pio.orca.config)
+    exit(1)
 
     analyzer.normalize_bins(args.control_name)
     analyzer.get_fold_change(args.control_name, args.pairwise)

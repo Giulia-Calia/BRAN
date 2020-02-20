@@ -24,6 +24,7 @@ from Bio.SeqIO.FastaIO import SimpleFastaParser
 import pysam
 import progressbar
 
+
 # ----------------------------------------------
 # in readme insert progressbar2 not progressbar
 # insert also psutils
@@ -253,13 +254,14 @@ class BinReadCounter:
                                 if cigar and read.cigarstring is not None:
                                     if not any(filt in read.cigarstring for filt in self.cigar_filter):
                                         read_pos = int(read.reference_start)
-                                        bin_location = read_pos//self.bin_size
+                                        bin_location = read_pos // self.bin_size
                                         read_counts[clone][list_chrom.index(chrom)][int(bin_location)] += 1
 
                                     else:
                                         read_pos = int(read.reference_start)
                                         bin_location = read_pos // self.bin_size
-                                        read_counts[clone + "_cig_filt"][list_chrom.index(chrom)][int(bin_location)] += 1
+                                        read_counts[clone + "_cig_filt"][list_chrom.index(chrom)][
+                                            int(bin_location)] += 1
 
                                 elif not cigar:
                                     read_pos = int(read.reference_start)
@@ -366,14 +368,14 @@ class BinReadCounter:
                             # calculate the read position and the beginning of the mate
                             # if both fall into the same bin, an "Y" is assigned and an
                             # "N" otherwise
-                            read_pos = int(read.reference_start)//self.bin_size
-                            mate_pos = int(read.pnext)//self.bin_size
+                            read_pos = int(read.reference_start) // self.bin_size
+                            mate_pos = int(read.pnext) // self.bin_size
                             if read_pos == mate_pos:
                                 mate_in_bin.append("Y")
                             else:
                                 mate_in_bin.append("N")
 
-        read_id_df = pd.DataFrame({"ids": list(ids), "chr": chr_location, "mate_in_bin": mate_in_bin}) # "bin", "flag"
+        read_id_df = pd.DataFrame({"ids": list(ids), "chr": chr_location, "mate_in_bin": mate_in_bin})  # "bin", "flag"
 
         return read_id_df
 
@@ -504,22 +506,20 @@ if __name__ == "__main__":
     if args.folder != dict_args["folder"]:
         folders = dict_args["folder"] + args.folder
         print(folders)
-        counter = TestingBinReadCounter(folders,
-                                        args.bin_size,
-                                        flags,
-                                        args.reference,
-                                        args.cigar_filter,
-                                        args.output_pickle)
+        counter = BinReadCounter(folders,
+                                 args.bin_size,
+                                 flags,
+                                 args.reference,
+                                 args.cigar_filter,
+                                 args.output_pickle)
     else:
         folder = args.folder
-        counter = TestingBinReadCounter(folder,
-                                        args.bin_size,
-                                        flags,
-                                        args.reference,
-                                        args.cigar_filter,
-                                        args.output_pickle)
-
-
+        counter = BinReadCounter(folder,
+                                 args.bin_size,
+                                 flags,
+                                 args.reference,
+                                 args.cigar_filter,
+                                 args.output_pickle)
 
     # print(counter._load_reads(args.cigar, args.unmapped))
 
@@ -540,5 +540,3 @@ if __name__ == "__main__":
     #
     # else:
     #     counter._export_pickle()
-
-

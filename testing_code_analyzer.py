@@ -170,29 +170,37 @@ class TestingBinReadAnalyzer:
 
                         self.set_parameters(parameters)
                         return self.parameters
-
                 except:
                     i += 1
                     continue
+                # except:
+                #     raise Exception("Some parameters in the pickle are changed, are you sure to continue?")
+                #     decision = input("[y/n]: ")
+                #     if decision == "y" or decision == "yes":
+                #         continue
+                #     elif decision == "n" or decision == "no":
+                #         print("Please try again with other parameters")
+                #     else:
+                #         print('Sorry you have to specify "y"/"yes" or "n"/"no"')
         if verbose:
             print("Other processes running at this moment: ", i)
-        if not found:
-            # if not found, none of the pickle files in the current directory
-            # have the same parameters of the actual running or a file pickle is not p
-            # resent at all in the directory thus the algorithm uses the modules of the
-            # BinReadCounter to calculate the new data structures and it saves a new pickle file
-            if verbose:
-                print("Parameters are changed or no pickle file exists",
-                      "\nBinReadCounter is running with actual parameters",
-                      "\nIT COULD TAKE A WHILE to create and import the pickle file")
+            if not found:
+                # if not found, none of the pickle files in the current directory
+                # have the same parameters of the actual running or a file pickle is not p
+                # resent at all in the directory thus the algorithm uses the modules of the
+                # BinReadCounter to calculate the new data structures and it saves a new pickle file
+                if verbose:
+                    print("Parameters are changed or no pickle file exists",
+                          "\nBinReadCounter is running with actual parameters",
+                          "\nIT COULD TAKE A WHILE to create and import the pickle file")
 
-            counter._export_pickle(cigar, reference, read_info, unmapped)
-            name_pickle = counter.pickle_file_name(cigar, reference, read_info, unmapped)
-            parameters = counter._load_pickle(name_pickle)
+                counter._export_pickle(cigar, reference, read_info, unmapped)
+                name_pickle = counter.pickle_file_name(cigar, reference, read_info, unmapped)
+                parameters = counter._load_pickle(name_pickle)
 
-            self.set_parameters(parameters)
-            print(self.parameters)
-            return self.parameters
+                self.set_parameters(parameters)
+                print(self.parameters)
+                return self.parameters
 
     def normalize_bins(self, control_name):  # , df_counts, bin_size
         """This method handles the normalization of the raw read_counts
@@ -647,7 +655,8 @@ class TestingBinReadAnalyzer:
                                                      width=1280,
                                                      height=1024)
 
-    def plot_chrom_sample(self, saving_folder, reference, chrom, sample, template, ns=False, fig=go.Figure()):  # , cigar
+    def plot_chrom_sample(self, saving_folder, reference, chrom, sample, template, ns=False,
+                          fig=go.Figure()):  # , cigar
         """This method allows to obtain a scatter-plot of raw read_counts
         for a specific chromosome and a specific sample
 
@@ -883,7 +892,8 @@ class TestingBinReadAnalyzer:
         #                            width=1280,
         #                            height=1024)
 
-    def plot_norm_data_chr_sample(self, saving_folder, reference, chrom, sample, template, ns=False, fig=go.Figure()):  # , cigar
+    def plot_norm_data_chr_sample(self, saving_folder, reference, chrom, sample, template, ns=False,
+                                  fig=go.Figure()):  # , cigar
         """This method allows to obtain a scatter-plot of normalized_read_counts
         of a specific chromosome of a specific sample
 
@@ -949,7 +959,7 @@ class TestingBinReadAnalyzer:
         #                            width=1280,
         #                            height=1024)
 
-    def plot_norm_data_chr(self, saving_folder, reference, chrom, template,  ns=False, fig=go.Figure()):  # , cigar
+    def plot_norm_data_chr(self, saving_folder, reference, chrom, template, ns=False, fig=go.Figure()):  # , cigar
         """This method allows to obtain a scatter-plot of normalized_read_counts
         of a specific chromosome for all samples
 
@@ -1070,7 +1080,8 @@ class TestingBinReadAnalyzer:
         #                            width=1280,
         #                            height=1024)
 
-    def plot_norm_data_all(self, saving_folder, reference, template, ns=False, fig=go.Figure()):  # df_counts, bin_size / cigar
+    def plot_norm_data_all(self, saving_folder, reference, template, ns=False,
+                           fig=go.Figure()):  # df_counts, bin_size / cigar
         """This method allows to obtain a scatter-plot of normalized_read_counts
         in all chromosomes and for all samples
 
@@ -2069,9 +2080,6 @@ if __name__ == "__main__":
             analyzer.plot_norm_data_sample(args.saving_folder, args.reference, args.sample, template, args.Ns_count)
             analyzer.plot_fold_change_sample(args.pairwise, args.fold_change, args.sample,
                                              args.control_name, args.saving_folder)
-
-
-
 
     # ---------------------------------
     # import plotly.express as px
