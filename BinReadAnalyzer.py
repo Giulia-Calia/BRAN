@@ -1511,8 +1511,8 @@ if __name__ == "__main__":
     if not os.path.exists(args.saving_folder):
         os.mkdir(args.saving_folder)
 
-    print(pio.orca.config)
-    exit(1)
+    # print(pio.orca.config)
+    # exit(1)
 
     analyzer.normalize_bins(args.control_name)
     analyzer.get_fold_change(args.control_name, args.pairwise)
