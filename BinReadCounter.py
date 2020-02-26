@@ -521,22 +521,4 @@ if __name__ == "__main__":
                                  args.cigar_filter,
                                  args.output_pickle)
 
-    # print(counter._load_reads(args.cigar, args.unmapped))
 
-    counter._export_pickle(args.cigar, args.reference, args.read_info, args.unmapped)
-
-    # print(counter._load_pickle("BRAN250000_df_c_u.p"))
-
-    exit(1)
-
-    # if args.reference and args.read_info:
-    #     counter._export_pickle(reference=True, read_info=True)
-    #
-    # elif args.reference:
-    #     counter._export_pickle(reference=True)
-    #
-    # elif args.read_info:
-    #     counter._export_pickle(read_info=True)
-    #
-    # else:
-    #     counter._export_pickle()
