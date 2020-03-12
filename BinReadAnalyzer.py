@@ -1829,8 +1829,7 @@ if __name__ == "__main__":
 
     # if args.folder != dict_args["folder"]:
     #     args.folder = dict_args["folder"] + args.folder
-    print(args.folder)
-    exit(1)
+
     analyzer = TestingBinReadAnalyzer(args.folder,
                                       args.bin_size,
                                       args.reference,
