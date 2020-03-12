@@ -338,46 +338,73 @@ class BinReadCounter:
         n_counts = pd.DataFrame({"index": index_n, "chr": chromosomes, "bin": bins, "N_count": n_per_bin})
         return n_counts
 
-    def _load_read_ID(self):
+    def _load_read_ID(self, cigar=False):
         """Gives information on the effective presence of the read mate in the
         same bin or not
 
         Return:
             A pandas DataFrame with three columns, id, chr, mate_in_same_bin
         """
-        ids = set()
-        chr_location = []
-        mate_in_bin = []
-        dir_list = os.listdir(self.folder)
-        for el in dir_list:
-            if el.endswith(".bam"):
-                bar_id = progressbar.ProgressBar(max_value=progressbar.UnknownLength)
-                i = 0
-                samfile = pysam.AlignmentFile(self.folder + el, "rb")
-                for read in samfile.fetch():
-                    # progress bar updating
-                    i += 1
-                    bar_id.update(i)
 
-                    if str(read.flag) in self.flags:
-                        read_id = read.query_name
-                        read_chr_location = read.reference_name
-                        if read_id not in ids:
-                            ids.add(read_id)
-                            chr_location.append(read_chr_location)
-                            # calculate the read position and the beginning of the mate
-                            # if both fall into the same bin, an "Y" is assigned and an
-                            # "N" otherwise
-                            read_pos = int(read.reference_start) // self.bin_size
-                            mate_pos = int(read.pnext) // self.bin_size
-                            if read_pos == mate_pos:
-                                mate_in_bin.append("Y")
-                            else:
-                                mate_in_bin.append("N")
 
-        read_id_df = pd.DataFrame({"ids": list(ids), "chr": chr_location, "mate_in_bin": mate_in_bin})  # "bin", "flag"
 
-        return read_id_df
+        with open(self.out + "BRAN" + str(self.bin_size) + "read_info.txt", "w") as info_file:
+            info_file.write("sample \t read_id \t bin \t mate_in_bin \n")
+            # info = {"sample": [], "ids": [], "bin": [], "mate_in_bin": []}
+            for f in self.folder:
+                dir_list = os.listdir(f)
+                for el in dir_list:
+                    if el.endswith(".bam"):
+                        print("\nRead Bin Information for: ", el)
+                        bar_id = progressbar.ProgressBar(max_value=progressbar.UnknownLength)
+                        i = 0
+                        bamfile = pysam.AlignmentFile(f + el, "rb")
+                        for read in bamfile.fetch():
+                            # progress bar updating
+                            i += 1
+                            bar_id.update(i)
+
+                            if str(read.flag) in self.flags:
+                                if cigar and read.cigarstring is not None:
+                                    if not any(filt in read.cigarstring for filt in self.cigar_filter):
+                                        read_pos = int(read.reference_start)
+                                        bin_location = read_pos // self.bin_size
+                                        mate = ""
+                                        read_pos_in_bin = int(read.reference_start) // self.bin_size
+                                        mate_pos_in_bin = int(read.pnext) // self.bin_size
+                                        # calculate the read position and the beginning of the mate
+                                        # if both fall into the same bin, an "Y" is assigned and an
+                                        # "N" otherwise
+                                        if read_pos_in_bin == mate_pos_in_bin:
+                                            mate = "yes"
+                                        else:
+                                            mate = "no"
+
+                                        info_file.writelines([el[:el.find(".bam")], "\t",
+                                                              read.query_name, "\t",
+                                                              str(bin_location), "\t",
+                                                              mate, "\n"])
+
+                                else:
+                                    read_pos = int(read.reference_start)
+                                    bin_location = read_pos // self.bin_size
+                                    mate = ""
+                                    read_pos_in_bin = int(read.reference_start) // self.bin_size
+                                    mate_pos_in_bin = int(read.pnext) // self.bin_size
+                                    # calculate the read position and the beginning of the mate
+                                    # if both fall into the same bin, an "Y" is assigned and an
+                                    # "N" otherwise
+                                    if read_pos_in_bin == mate_pos_in_bin:
+                                        mate = "yes"
+                                    else:
+                                        mate = "no"
+
+                                    info_file.writelines([el[:el.find(".bam")], "\t",
+                                                          read.query_name, "\t",
+                                                          str(bin_location), "\t",
+                                                          mate, "\n"])
+
+            return "Read_info file is created in the specified folder for pickle output"
 
     def _load_pickle(self, file_name):
         """Retrieve information from the pickle file
@@ -423,8 +450,7 @@ class BinReadCounter:
                         "unmapped_reads": self.unmapped,
                         "ref": None,
                         "n_counts": None,
-                        "info": None,
-                        "read_id_info": None}
+                        "info": None}
 
             if reference:
                 out_data["ref"] = self.get_ref_name()
@@ -432,7 +458,6 @@ class BinReadCounter:
 
             if read_info:
                 out_data["info"] = True
-                out_data["read_id_info"] = self._load_read_ID()
 
             # print(exp_file, "\n", out_data)
             pickle.dump(out_data, exp_file)
