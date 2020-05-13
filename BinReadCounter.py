@@ -36,8 +36,8 @@ import progressbar
 
 
 class BinReadCounter:
-    """This class creates different data structures depending on the
-    parameters given by the user
+    """The scope of this class is to create data structures necessary
+    for downstream analysis
 
     Attributes:
         folder (str): the folder in which retrieve the alignment files
@@ -464,6 +464,7 @@ class BinReadCounter:
 
 
 if __name__ == "__main__":
+
     parser = argparse.ArgumentParser(usage="%(prog)s [options]",
                                      formatter_class=argparse.RawDescriptionHelpFormatter,
                                      description="",

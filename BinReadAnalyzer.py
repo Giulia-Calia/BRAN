@@ -54,7 +54,7 @@ edger = rpackages.importr('edgeR')
 # --------------------------
 
 
-class TestingBinReadAnalyzer:
+class BinReadAnalyzer:
     """This class provides different analysis of the data coming form
     BinReadCounter class; here imported.
 
@@ -298,6 +298,11 @@ class TestingBinReadAnalyzer:
 
         norm_counts_df = pd.DataFrame(norm_counts_dict)
         norm_counts_df = pd.concat([read_counts["chr"], read_counts['bin'], norm_counts_df], axis=1)
+        print("--------------------------------")
+
+        print("--------------------------------")
+
+
         # print(read_counts[["chr", "bin"]])
         # print(norm_counts_df)
         log_norm_counts_df = pd.DataFrame(log_norm_counts_dict)
@@ -380,75 +385,75 @@ class TestingBinReadAnalyzer:
             self.set_clipped_fold_change(fc_clip_all)
             return self.fold_change, self.clipped_fold_change
 
-    def plot_background(self, fig):  # , df_counts
-        read_counts = self.parameters["read_counts"]
-        # # print(read_counts)
-        # sorted_df = read_counts.sort_values(["chr", "bin"])
-        # # print(sorted_df)
-        # # self.sorted_chromosomes(read_counts["chr"])
-        # print(self.sorted_chromosomes(read_counts["chr"]))
-        # sorted_df.to_csv("read_counts.txt", sep="\t")
-        # read_counts = df_counts
-        coordinates_x = []
-        coordinates_y = []
-        chromosomes = []
-        start = 0
-
-        for ch in read_counts["chr"]:
-            # if ch[ch.find("c"):] not in chromosomes:
-            if ch not in chromosomes:
-                chromosomes.append(ch)
-        # if the chromosomes are not sorted in ascending order, using the sort_
-        # chromosomes method, we sort alphanumeric strings
-        chromosomes = self.sorted_chromosomes(chromosomes)
-        # print(chromosomes)
-        for chrom in chromosomes:
-            single_df = read_counts[read_counts["chr"] == chrom]
-            # here start and end are updated every time, to allow concatenation of chromosomes on the plot
-            # the average position within the interval of each chromosome take in account only the length of the
-            # interval itself
-            length = (single_df["bin"].iloc[-1] + 1) * self.parameters["bin_size"]
-            tmp_end = start + length
-            # print("start", start)
-            # print("end", tmp_end)
-            avg = start + length / 2
-            coordinates_x.append(avg)
-            coordinates_y.append(-5)
-            if int(chrom[chrom.find("r") + 1:]) % 2 == 0:
-                fig.add_shape(go.layout.Shape(type="rect",
-                                              xref="x",
-                                              yref="paper",
-                                              x0=start,
-                                              y0=0,
-                                              x1=tmp_end,
-                                              y1=1,
-                                              fillcolor="rgb(230, 230, 250)",  # lavande
-                                              opacity=0.5,
-                                              layer="below",
-                                              line_width=0))
-            else:
-                fig.add_shape(go.layout.Shape(type="rect",
-                                              xref="x",
-                                              yref="paper",
-                                              x0=start,
-                                              y0=0,
-                                              x1=tmp_end,
-                                              y1=1,
-                                              fillcolor="rgb(240, 248, 255)",  # ~light_mint_green
-                                              opacity=0.5,
-                                              layer="below",
-                                              line_width=0))
-
-            start = tmp_end
-
-        fig.add_trace(go.Scatter(x=coordinates_x,
-                                 y=coordinates_y,
-                                 text=chromosomes,
-                                 mode="text",
-                                 showlegend=False,
-                                 ))
-        # fig.show()
-        return fig
+    # def plot_background(self, fig):  # , df_counts
+    #     read_counts = self.parameters["read_counts"]
+    #     # # print(read_counts)
+    #     # sorted_df = read_counts.sort_values(["chr", "bin"])
+    #     # # print(sorted_df)
+    #     # # self.sorted_chromosomes(read_counts["chr"])
+    #     # print(self.sorted_chromosomes(read_counts["chr"]))
+    #     # sorted_df.to_csv("read_counts.txt", sep="\t")
+    #     # read_counts = df_counts
+    #     coordinates_x = []
+    #     coordinates_y = []
+    #     chromosomes = []
+    #     start = 0
+    #
+    #     for ch in read_counts["chr"]:
+    #         # if ch[ch.find("c"):] not in chromosomes:
+    #         if ch not in chromosomes:
+    #             chromosomes.append(ch)
+    #     # if the chromosomes are not sorted in ascending order, using the sort_
+    #     # chromosomes method, we sort alphanumeric strings
+    #     chromosomes = self.sorted_chromosomes(chromosomes)
+    #     # print(chromosomes)
+    #     for chrom in chromosomes:
+    #         single_df = read_counts[read_counts["chr"] == chrom]
+    #         # here start and end are updated every time, to allow concatenation of chromosomes on the plot
+    #         # the average position within the interval of each chromosome take in account only the length of the
+    #         # interval itself
+    #         length = (single_df["bin"].iloc[-1] + 1) * self.parameters["bin_size"]
+    #         tmp_end = start + length
+    #         # print("start", start)
+    #         # print("end", tmp_end)
+    #         avg = start + length / 2
+    #         coordinates_x.append(avg)
+    #         coordinates_y.append(-5)
+    #         if int(chrom[chrom.find("r") + 1:]) % 2 == 0:
+    #             fig.add_shape(go.layout.Shape(type="rect",
+    #                                           xref="x",
+    #                                           yref="paper",
+    #                                           x0=start,
+    #                                           y0=0,
+    #                                           x1=tmp_end,
+    #                                           y1=1,
+    #                                           fillcolor="rgb(230, 230, 250)",  # lavande
+    #                                           opacity=0.5,
+    #                                           layer="below",
+    #                                           line_width=0))
+    #         else:
+    #             fig.add_shape(go.layout.Shape(type="rect",
+    #                                           xref="x",
+    #                                           yref="paper",
+    #                                           x0=start,
+    #                                           y0=0,
+    #                                           x1=tmp_end,
+    #                                           y1=1,
+    #                                           fillcolor="rgb(240, 248, 255)",  # ~light_mint_green
+    #                                           opacity=0.5,
+    #                                           layer="below",
+    #                                           line_width=0))
+    #
+    #         start = tmp_end
+    #
+    #     fig.add_trace(go.Scatter(x=coordinates_x,
+    #                              y=coordinates_y,
+    #                              text=chromosomes,
+    #                              mode="text",
+    #                              showlegend=False,
+    #                              ))
+    #     # fig.show()
+    #     return fig
 
     def add_threshold_fc(self, fig, fc):
         read_counts = self.parameters["read_counts"]
@@ -730,7 +735,7 @@ class TestingBinReadAnalyzer:
         if ns:
             self.add_ns_trace(fig, reference=reference)
 
-        self.plot_background(fig)
+        # self.plot_background(fig)
 
         fig.update_layout(title="Read Counts - Clone: " + sample +
                                 " - Bin Size: " + str(self.bin_size),
@@ -791,7 +796,7 @@ class TestingBinReadAnalyzer:
         if ns:
             self.add_ns_trace(fig, reference=reference)
 
-        self.plot_background(fig)
+        # self.plot_background(fig)
 
         fig.show()
 
@@ -945,7 +950,7 @@ class TestingBinReadAnalyzer:
         if ns:
             self.add_ns_trace(fig, reference=reference)
 
-        self.plot_background(fig)
+        # self.plot_background(fig)
 
         fig.update_layout(title="Normalized Read Counts - Clone: " +
                                 sample +
@@ -1007,7 +1012,7 @@ class TestingBinReadAnalyzer:
         if ns:
             self.add_ns_trace(fig, reference=reference)
 
-        self.plot_background(fig)
+        # self.plot_background(fig)
 
         fig.show()
         save_fig = fig.write_image(saving_folder + "scatter_norm_all_counts_" +
@@ -1227,7 +1232,7 @@ class TestingBinReadAnalyzer:
                     #                            height=1024)
 
             self.add_threshold_fc(fig, fc)
-            self.plot_background(fig)
+            # self.plot_background(fig)
             # fig.show()
 
         else:
@@ -1304,7 +1309,7 @@ class TestingBinReadAnalyzer:
                     #     legend_orientation="h")
 
             self.add_threshold_fc(fig, fc)
-            self.plot_background(fig)
+            # self.plot_background(fig)
 
             fig.show()
             save_fig = fig.write_image(saving_folder +
@@ -1364,7 +1369,7 @@ class TestingBinReadAnalyzer:
                                       legend_orientation="h")
 
             self.add_threshold_fc(fig, fc)
-            self.plot_background(fig)
+            # self.plot_background(fig)
 
             fig.show()
 
@@ -1409,7 +1414,7 @@ class TestingBinReadAnalyzer:
                 #                                                                              str(self.bin_size)),
                 #                   legend_orientation="h")
 
-        self.plot_background(fig)
+        # self.plot_background(fig)
 
         fig.show()
         save_fig = fig.write_image(saving_folder + "clipped_reads_counts" + str(self.bin_size) + ".jpeg",
@@ -1489,7 +1494,7 @@ class TestingBinReadAnalyzer:
                     #                   legend_orientation="h")
 
             self.add_threshold_fc(fig, fc)
-            self.plot_background(fig)
+            # self.plot_background(fig)
             fig.show()
             save_fig = fig.write_image(saving_folder +
                                        "pairwise_clipped_fold_change_" +
@@ -1567,7 +1572,7 @@ class TestingBinReadAnalyzer:
                                       legend_orientation="h")
 
             self.add_threshold_fc(fig, fc)
-            self.plot_background(fig)
+            # self.plot_background(fig)
             fig.show()
             save_fig = fig.write_image(saving_folder +
                                        "clipped_fold_change_" +
@@ -1830,7 +1835,7 @@ if __name__ == "__main__":
     # if args.folder != dict_args["folder"]:
     #     args.folder = dict_args["folder"] + args.folder
 
-    analyzer = TestingBinReadAnalyzer(args.folder,
+    analyzer = BinReadAnalyzer(args.folder,
                                       args.bin_size,
                                       args.reference,
                                       flags,
@@ -1853,14 +1858,15 @@ if __name__ == "__main__":
     analyzer.calc_fold_change(args.control_name, args.pairwise)
 
     if args.general_info and args.cigar:
-        analyzer.plot_violin_dist_counts(args.saving_folder)
-        analyzer.plot_bar_chart(args.saving_folder, args.cigar, args.unmapped)
-        analyzer.plot_all(args.saving_folder, args.reference, template, args.Ns_count)
-        analyzer.plot_norm_data_all(args.saving_folder, args.reference, template)
-        analyzer.plot_filtered_reads(args.saving_folder)
-        analyzer.plot_fold_change(args.fold_change, args.saving_folder, args.pairwise, args.control_name)
-        analyzer.plot_filt_reads_fold_change(args.fold_change, args.pairwise, args.control_name, args.saving_folder)
-        analyzer.sig_positions_output_file(args.fold_change, args.control_name, args.output_pickle)
+        print("ok")
+        # analyzer.plot_violin_dist_counts(args.saving_folder)
+        # analyzer.plot_bar_chart(args.saving_folder, args.cigar, args.unmapped)
+        # analyzer.plot_all(args.saving_folder, args.reference, template, args.Ns_count)
+        # analyzer.plot_norm_data_all(args.saving_folder, args.reference, template)
+        # analyzer.plot_filtered_reads(args.saving_folder)
+        # analyzer.plot_fold_change(args.fold_change, args.saving_folder, args.pairwise, args.control_name)
+        # analyzer.plot_filt_reads_fold_change(args.fold_change, args.pairwise, args.control_name, args.saving_folder)
+        # analyzer.sig_positions_output_file(args.fold_change, args.control_name, args.output_pickle)
 
     elif args.general_info:
         analyzer.plot_counts_distributions(args.saving_folder)
