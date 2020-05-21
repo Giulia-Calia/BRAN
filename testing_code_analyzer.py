@@ -1103,11 +1103,7 @@ class TestingBinReadAnalyzer:
         # fig = go.Figure()
         # visualizer.plot_background(fig)
         # visualizer.add_threshold_fc(fig, fc)
-        visualizer.plot_fold_change(fc, pairwise, control_name)
-        print("\nok5")
-        visualizer.plot_clip_fold_change(fc, pairwise, control_name)
-        print("\nok6")
-        exit(1)
+
         visualizer.plot_violin()
         print("\nok1")
         visualizer.plot_bar(cigar, unmapped)
@@ -1123,12 +1119,12 @@ class TestingBinReadAnalyzer:
 
 
 if __name__ == "__main__":
-
-    parser = argparse.ArgumentParser(usage="%(prog)s [options]",
-                                     formatter_class=argparse.RawDescriptionHelpFormatter,
-                                     description="",
-                                     epilog="")
-
+    #
+    # parser = argparse.ArgumentParser(usage="%(prog)s [options]",
+    #                                  formatter_class=argparse.RawDescriptionHelpFormatter,
+    #                                  description="",
+    #                                  epilog="")
+    parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("-bs", "--bin_size",
                         type=int,
                         default=250000,
