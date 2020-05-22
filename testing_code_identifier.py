@@ -17,7 +17,7 @@ import argparse
 
 class TestingBinReadIdentifier:
     def __init__(self, bin_size, flag_list, folder, saving_folder, bins, cigar, cigar_filter):
-        self.bin_size = bin_size
+        self.bin_size = int(bin_size)
         self.flags = flag_list
         self.bam_folder = folder  # a list of folders
         self.saving_folder = saving_folder
@@ -145,6 +145,11 @@ if __name__ == "__main__":
                         help="""If specified, the reads mapped with soft and hard clipping (S and H) by default, 
                         are taken out form the read counts; it returns a data frame with same structure of the 
                         default one.\n(Specify other filters like e.g. "I" "D")""")
+
+    parser.add_argument("-id", "--identifier",
+                        # type=str,
+                        action="store_true",
+                        help="if identifier class is needed")
 
     print(parser.print_help())
     args = parser.parse_args()

@@ -35,6 +35,7 @@ import rpy2.robjects as robjects
 import rpy2.robjects.packages as rpackages
 from testing_code_counter import TestingBinReadCounter
 from testing_code_visualizer import TestingBinReadVisualizer
+from testing_code_identifier import TestingBinReadIdentifier
 from rpy2.robjects.packages import importr
 from rpy2.robjects import pandas2ri
 from plotly.subplots import make_subplots
@@ -1119,12 +1120,12 @@ class TestingBinReadAnalyzer:
 
 
 if __name__ == "__main__":
-    #
-    # parser = argparse.ArgumentParser(usage="%(prog)s [options]",
-    #                                  formatter_class=argparse.RawDescriptionHelpFormatter,
-    #                                  description="",
-    #                                  epilog="")
-    parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
+
+    parser = argparse.ArgumentParser(usage="%(prog)s [options]",
+                                     # formatter_class=argparse.RawDescriptionHelpFormatter,
+                                     description="",
+                                     epilog="")
+    # parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("-bs", "--bin_size",
                         type=int,
                         default=250000,
@@ -1202,7 +1203,7 @@ if __name__ == "__main__":
 
     parser.add_argument("-sf", "--saving_folder",
                         type=str,
-                        default="./plots/",
+                        default="./",
                         help="""Path to the directory in which create the plots folder and save all images; 
                         if not specified, a directory 'plots' will be created in the current one""")
 
@@ -1220,6 +1221,23 @@ if __name__ == "__main__":
                         action="store_true",
                         help="""If specified, distribution_plot, norm_plot_all, (filtered_plot_all) and 
                         fold_change_plot are displayed""")
+
+    parser.add_argument("-bc", "--bin_chromosomes",
+                        nargs="+",
+                        default=[],
+                        type=str,
+                        help="""the name of the chromosome for each interesting bin (no repetitions)""")
+
+    parser.add_argument("-bp", "--bin_positions",
+                        nargs="+",
+                        default=[],
+                        type=int,
+                        help="""The bin position on the corresponding chromosome, be careful that for each position 
+                            there is on and only one chromosome""")
+
+    parser.add_argument("-id", "--identifier",
+                        action="store_true",
+                        help="if identifier class is needed")
 
     # pio.templates.default = "seaborn+none"
     # template = "seaborn+none"
@@ -1239,8 +1257,8 @@ if __name__ == "__main__":
     else:
         flags = args.flag_list
 
-    # if args.folder != dict_args["folder"]:
-    #     args.folder = dict_args["folder"] + args.folder
+    if args.folder != dict_args["folder"]:
+        args.folder = dict_args["folder"] + args.folder
 
     analyzer = TestingBinReadAnalyzer(args.folder,
                                       args.bin_size,
@@ -1256,13 +1274,29 @@ if __name__ == "__main__":
                        unmapped=args.unmapped,
                        verbose=True)
 
-    if not os.path.exists(args.saving_folder):
-        os.mkdir(args.saving_folder)
+    if not os.path.exists(args.saving_folder + "plots"):
+        os.mkdir(args.saving_folder + "plots")
+
     analyzer.no_repeats_df_transformation()
     analyzer.normalize_bins(args.control_name)
-    # exit(1)
     analyzer.calc_fold_change(args.control_name, args.pairwise)
     analyzer.summary_sig_bins(args.fold_change)
+
+    if args.identifier:
+        if not os.path.exists(args.saving_folder + "ids"):
+            os.mkdir(args.saving_folder + "ids")
+        bin_dictionary = dict(zip(args.bin_chromosomes, args.bin_positions))
+        ide = TestingBinReadIdentifier(args.bin_size,
+                                       args.flag_list,
+                                       args.folder,
+                                       args.saving_folder + "ids",
+                                       bin_dictionary,
+                                       args.cigar,
+                                       args.cigar_filter)
+        ide.load_bam()
+        ide.mapped_ids()
+
+    exit(1)
 
     if args.general_info and args.cigar:
         print("\nok")
@@ -1270,7 +1304,8 @@ if __name__ == "__main__":
         analyzer.output_sig_positions(args.fold_change, args.control_name, args.output_pickle)
         analyzer.plot(template, args.saving_folder, args.saving_format, args.cigar,
                       args.unmapped, args.reference, args.fold_change, args.pairwise, args.control_name)
-        exit(1)
+
+
         # analyzer.plot_violin_dist_counts(args.saving_folder)
         # analyzer.plot_bar_chart(args.saving_folder, args.cigar, args.unmapped)
         # analyzer.plot_all(args.saving_folder, args.reference, template, args.Ns_count)
