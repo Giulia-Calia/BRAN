@@ -344,6 +344,7 @@ class TestingBinReadAnalyzer:
             norm_bar.update(update_bar)
 
         norm_clip_df = pd.DataFrame(norm_clip)
+        norm_clip_df = pd.concat([read_counts["chr"], read_counts["bin"], norm_clip_df], axis=1)
         log_norm_clip_df = pd.DataFrame(log_norm_clip)
         log_norm_clip_df = pd.concat([read_counts["chr"], read_counts['bin'], log_norm_clip_df], axis=1)
 
@@ -358,7 +359,7 @@ class TestingBinReadAnalyzer:
             norm_bar.update(update_bar)
 
         self.set_norm_unmapped(norm_unmapped)
-
+        # print(norm_clip_df)
         return self.norm, self.log_norm, self.norm_clip, self.log_norm_clip, self.norm_unmapped
 
     def calc_fold_change(self, control_name, pairwise=False):
@@ -503,66 +504,6 @@ class TestingBinReadAnalyzer:
                                                 name="N_counts"))
         else:
             print("Sorry, to add this trace to the plot, you have to specify the reference file name\nPlease try again")
-
-    def plot_chrom_sample(self, saving_folder, reference, chrom, sample, template, ns=False,
-                          fig=go.Figure()):  # , cigar
-        """This method allows to obtain a scatter-plot of raw read_counts
-        for a specific chromosome and a specific sample
-
-        Args:
-            reference (bool): true if the reference is declared
-            chrom (int): a number representing the chromosome of interest
-            sample (str): the name of the sample of interest (it corresponds
-                          to the name of the column in the data structure)
-            ns (bool): by default sets to False, but is one want to include
-                       the Ns count trace, it has to set to True
-            fig (obj): is a go.Figure() object for the building of the plot
-
-        Returns:
-            A scatter-plot of counts
-        """
-        read_counts = self.parameters["read_counts"]
-
-        fig.update_xaxes(title_text="Chromosomes_Position")
-        fig.update_yaxes(title_text="Read_Count_Per_Bin")
-
-        c_name = None
-        for c in list(read_counts["chr"]):
-            if c.endswith(str(chrom)):
-                c_name = c
-
-        single_chrom = read_counts[read_counts["chr"] == c_name]
-        col_list = list(single_chrom.columns)
-        hover_pos = single_chrom["bin"] * self.bin_size
-        for i in range(len(col_list[:col_list.index(sample)]) + 1):
-            if col_list[i] == sample:
-                fig.add_trace(go.Scatter(x=hover_pos,  # list(single_chrom.index * self.bin_size),
-                                         y=single_chrom[sample],
-                                         hovertext=hover_pos,
-                                         hovertemplate=
-                                         "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                         mode="markers",
-                                         name=str(col_list[i])))
-
-        if ns:
-            self.add_ns_trace(fig, reference=reference, chrom=chrom)
-
-        fig.update_layout(title="Read Counts - Clone: " +
-                                sample +
-                                " - Chr: " + str(chrom) +
-                                " - Bin Size: " + str(self.bin_size),
-                          template=template,
-                          legend_orientation="h")
-
-        # fig.show()
-        # save_fig = fig.write_image(saving_folder +
-        #                            "scatter_counts_chr" +
-        #                            str(chrom) +
-        #                            sample +
-        #                            str(self.bin_size) +
-        #                            ".jpeg",
-        #                            width=1280,
-        #                            height=1024)
 
     def plot_chromosome(self, saving_folder, reference, chrom, template, ns=False, fig=go.Figure()):  # , cigar
         """This method allows to obtain a scatter-plot of raw_read_counts
@@ -1046,42 +987,6 @@ class TestingBinReadAnalyzer:
             print("""ATTENTION: if parameter '-pw' not give, its impossible to retrieve graphical information 
                   on single sample fold-change. \nPlease TRY AGAIN specifying '-pw' or '--pairwise' in command line""")
 
-    def plot_filtered_reads(self, saving_folder):
-        read_counts = self.parameters["read_counts"]
-        fig = go.Figure()
-
-        fig.update_xaxes(title_text="Genome_Position")
-        fig.update_yaxes(title_text="Norm_Clipped_Read_counts")
-
-        for col in read_counts:
-            if "cig_filt" in col:  # and col[:col.find("cig_filt")] != control_ref:
-                hover_pos = read_counts["bin"] * self.bin_size
-                fig.add_trace(go.Scatter(x=list(self.norm_clip[col].index * self.bin_size),
-                                         y=self.norm_clip[col],
-                                         hovertext=hover_pos,
-                                         hovertemplate=
-                                         "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                         hoverinfo="text",
-                                         mode="markers",
-                                         # name=col[:col.find("_Illumina")]))
-                                         name=col[:col.find("_")]))
-
-                # general application--------------------------------------------------------------------------------
-                fig.update_layout(title="Norm_Clipped_Read_Counts - Bin Size: {}".format(str(self.bin_size)),
-                                  legend_orientation="h")
-                # test_application-------------------------------------------------------------------------------------
-                # if "ref" not in col:
-                #     fig.update_layout(title="{}<br>Norm_Clipped_Read_Counts - Bin Size: {}".format(col[:col.find("_")],
-                #                                                                              str(self.bin_size)),
-                #                   legend_orientation="h")
-
-        # self.plot_background(fig)
-
-        fig.show()
-        save_fig = fig.write_image(saving_folder + "clipped_reads_counts" + str(self.bin_size) + ".jpeg",
-                                   width=1920,
-                                   height=1080)
-
     def output_sig_positions(self, fc, control_name, file_output_path):
 
         sig_df = pd.concat([self.sig_bins, self.sig_clip_bins])
@@ -1096,7 +1001,8 @@ class TestingBinReadAnalyzer:
 
         print(sig_df)
 
-    def plot(self, plot_template, saving_folder, saving_format, cigar, unmapped, ref_genome, fc, pairwise, control_name):
+    def plot(self, plot_template, saving_folder, saving_format, cigar, unmapped, ref_genome, fc, pairwise, control_name,
+             chr_name=None, sample=None):
         visualizer = TestingBinReadVisualizer(self.bin_size, self.parameters["read_counts"], self.norm, self.log_norm,
                                               self.norm_clip, self.log_norm_clip, self.parameters["unmapped_reads"],
                                               self.norm_unmapped, self.fold_change, self.clipped_fold_change,
@@ -1104,6 +1010,13 @@ class TestingBinReadAnalyzer:
         # fig = go.Figure()
         # visualizer.plot_background(fig)
         # visualizer.add_threshold_fc(fig, fc)
+        visualizer.plot_norm_chr_sample(chr_name, sample, cigar)
+        print("\nok10")
+        visualizer.plot_norm_scatter(ref_genome)
+        print("\nok4")
+        visualizer.plot_chr_sample(chr_name, sample, cigar)
+        print("\nok9")
+        exit(1)
 
         visualizer.plot_violin()
         print("\nok1")
@@ -1117,7 +1030,14 @@ class TestingBinReadAnalyzer:
         print("\nok5")
         visualizer.plot_clip_fold_change(fc, pairwise, control_name)
         print("\nok6")
-
+        visualizer.plot_clipped_scatter(ref_genome)
+        print("\nok7")
+        visualizer.plot_norm_clipped_scatter(ref_genome)
+        print("\nok8")
+        visualizer.plot_chr_sample(chr_name, sample, cigar)
+        print("\nok9")
+        visualizer.plot_norm_chr_sample(chr_name, sample, cigar)
+        print("\nok10")
 
 if __name__ == "__main__":
 
@@ -1281,30 +1201,31 @@ if __name__ == "__main__":
     analyzer.normalize_bins(args.control_name)
     analyzer.calc_fold_change(args.control_name, args.pairwise)
     analyzer.summary_sig_bins(args.fold_change)
+    #
+    # if args.identifier:
+    #     if not os.path.exists(args.saving_folder + "ids"):
+    #         os.mkdir(args.saving_folder + "ids")
+    #     bin_dictionary = dict(zip(args.bin_chromosomes, args.bin_positions))
+    #     ide = TestingBinReadIdentifier(args.bin_size,
+    #                                    args.flag_list,
+    #                                    args.folder,
+    #                                    args.saving_folder + "ids",
+    #                                    bin_dictionary,
+    #                                    args.cigar,
+    #                                    args.cigar_filter)
+    #     ide.load_bam()
+    #     ide.mapped_ids()
 
-    if args.identifier:
-        if not os.path.exists(args.saving_folder + "ids"):
-            os.mkdir(args.saving_folder + "ids")
-        bin_dictionary = dict(zip(args.bin_chromosomes, args.bin_positions))
-        ide = TestingBinReadIdentifier(args.bin_size,
-                                       args.flag_list,
-                                       args.folder,
-                                       args.saving_folder + "ids",
-                                       bin_dictionary,
-                                       args.cigar,
-                                       args.cigar_filter)
-        ide.load_bam()
-        ide.mapped_ids()
-
-    exit(1)
 
     if args.general_info and args.cigar:
         print("\nok")
         analyzer.summary_sig_bins(args.fold_change)
         analyzer.output_sig_positions(args.fold_change, args.control_name, args.output_pickle)
         analyzer.plot(template, args.saving_folder, args.saving_format, args.cigar,
-                      args.unmapped, args.reference, args.fold_change, args.pairwise, args.control_name)
+                      args.unmapped, args.reference, args.fold_change, args.pairwise, args.control_name,
+                      chr_name=args.chromosome, sample=args.sample)
 
+    exit(1)
 
         # analyzer.plot_violin_dist_counts(args.saving_folder)
         # analyzer.plot_bar_chart(args.saving_folder, args.cigar, args.unmapped)
@@ -1315,32 +1236,32 @@ if __name__ == "__main__":
         # analyzer.plot_filt_reads_fold_change(args.fold_change, args.pairwise, args.control_name, args.saving_folder)
         # analyzer.sig_positions_output_file(args.fold_change, args.control_name, args.output_pickle)
 
-    elif args.general_info:
-        analyzer.plot_counts_distributions(args.saving_folder)
-        analyzer.plot_bar_chart(args.saving_folder, args.cigar, args.unmapped)
-        analyzer.plot_all(args.saving_folder, args.reference, template, args.Ns_count)
-        analyzer.plot_norm_data_all(args.saving_folder, args.reference, template)
-        analyzer.plot_fold_change(args.fold_change, args.saving_folder, args.pairwise)
-
-    else:
-        if args.chromosome and args.sample:
-            analyzer.plot_chrom_sample(args.saving_folder, args.reference, args.chromosome,
-                                       args.sample, template, args.Ns_count)
-            analyzer.plot_norm_data_chr_sample(args.saving_folder, args.reference, args.chromosome,
-                                               args.sample, template, args.Ns_count)
-            analyzer.plot_fold_change_chr_sample(args.pairwise, args.fold_change, args.chromosome,
-                                                 args.sample, args.control_name, args.saving_folder)
-
-        elif args.chromosome:
-            analyzer.plot_chromosome(args.saving_folder, args.reference, args.chromosome, template, args.Ns_count)
-            analyzer.plot_norm_data_chr(args.saving_folder, args.reference, args.chromosome, template, args.Ns_count)
-            analyzer.plot_fold_change_chr(args.pairwise, args.fold_change, args.chromosome, args.saving_folder)
-
-        else:
-            analyzer.plot_sample(args.saving_folder, args.reference, args.sample, template, args.Ns_count)
-            analyzer.plot_norm_data_sample(args.saving_folder, args.reference, args.sample, template, args.Ns_count)
-            analyzer.plot_fold_change_sample(args.pairwise, args.fold_change, args.sample,
-                                             args.control_name, args.saving_folder)
+    # elif args.general_info:
+    #     analyzer.plot_counts_distributions(args.saving_folder)
+    #     analyzer.plot_bar_chart(args.saving_folder, args.cigar, args.unmapped)
+    #     analyzer.plot_all(args.saving_folder, args.reference, template, args.Ns_count)
+    #     analyzer.plot_norm_data_all(args.saving_folder, args.reference, template)
+    #     analyzer.plot_fold_change(args.fold_change, args.saving_folder, args.pairwise)
+    #
+    # else:
+    #     if args.chromosome and args.sample:
+    #         analyzer.plot_chrom_sample(args.saving_folder, args.reference, args.chromosome,
+    #                                    args.sample, template, args.Ns_count)
+    #         analyzer.plot_norm_data_chr_sample(args.saving_folder, args.reference, args.chromosome,
+    #                                            args.sample, template, args.Ns_count)
+    #         analyzer.plot_fold_change_chr_sample(args.pairwise, args.fold_change, args.chromosome,
+    #                                              args.sample, args.control_name, args.saving_folder)
+    #
+    #     elif args.chromosome:
+    #         analyzer.plot_chromosome(args.saving_folder, args.reference, args.chromosome, template, args.Ns_count)
+    #         analyzer.plot_norm_data_chr(args.saving_folder, args.reference, args.chromosome, template, args.Ns_count)
+    #         analyzer.plot_fold_change_chr(args.pairwise, args.fold_change, args.chromosome, args.saving_folder)
+    #
+    #     else:
+    #         analyzer.plot_sample(args.saving_folder, args.reference, args.sample, template, args.Ns_count)
+    #         analyzer.plot_norm_data_sample(args.saving_folder, args.reference, args.sample, template, args.Ns_count)
+    #         analyzer.plot_fold_change_sample(args.pairwise, args.fold_change, args.sample,
+    #                                          args.control_name, args.saving_folder)
 
     # ----------------------------testing_each_plot---------------------------------------------------------------------
     # analyzer.plot_counts_distributions(args.saving_folder, args.cigar_filter)
