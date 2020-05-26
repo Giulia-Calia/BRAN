@@ -541,6 +541,7 @@ class TestingBinReadVisualizer:
                                                                                              sample,
                                                                                              str(self.bin_size)))
 
+
     def fold_change_colors(self):
         colors = px.colors.qualitative.T10
         colors[2] = "rgb(135,197,35)"  # light green
