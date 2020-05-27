@@ -270,7 +270,7 @@ class TestingBinReadVisualizer:
                           template=colors,
                           legend_orientation="h")
 
-    def plot_scatter(self, ref_genome, ns=False, fig=go.Figure()):
+    def plot_scatter(self, ref_genome=False, ns=False, fig=go.Figure()):
         """This method allows to obtain a scatter-plot of raw_read_counts
         of all chromosomes and all samples
 
@@ -292,7 +292,7 @@ class TestingBinReadVisualizer:
 
         for i in range(len(col_list)):
             if col_list[i] != "chr" and col_list[i] != "bin" and "cig_filt" not in col_list[i]:
-                fig.add_trace(go.Scatter(x=list(self.read_counts.index * self.bin_size),
+                fig.add_trace(go.Scatter(x=list(self.read_counts.index * self.bin_size),  # otw it begins from 0 any t.
                                          y=self.read_counts[col_list[i]],
                                          hovertext=hover_pos,
                                          hovertemplate=
@@ -466,7 +466,7 @@ class TestingBinReadVisualizer:
 
             fig2.show()
 
-            self.saving_plot(fig2, description="scatter_clipped_counts_{}_{}_{}".format(str(chr_name),
+            self.saving_plot(fig2, description="scatter_clip_counts_{}_{}_{}".format(str(chr_name),
                                                                                         sample,
                                                                                         str(self.bin_size)))
 
@@ -538,7 +538,7 @@ class TestingBinReadVisualizer:
 
             fig2.show()
 
-            self.saving_plot(fig2, description="scatter_norm_clipped_counts_{}_{}_{}".format(str(chr_name),
+            self.saving_plot(fig2, description="scatter_norm_clip_counts_{}_{}_{}".format(str(chr_name),
                                                                                              sample,
                                                                                              str(self.bin_size)))
 
@@ -648,7 +648,7 @@ class TestingBinReadVisualizer:
         if cigar:
             fig2 = go.Figure()
             fig2.update_xaxes(title_text="Chromosome_position")
-            fig2.update_yaxes(title_text="Norm_Clip_Read_Count_Per_Bin")
+            fig2.update_yaxes(title_text="Norm_Clipped_Read_Count_Per_Bin")
 
             clip_counts_chr = self.norm_clip_counts[self.norm_clip_counts["chr"].str.contains(chr_name) == True]
             for col in clip_counts_chr:
@@ -667,6 +667,142 @@ class TestingBinReadVisualizer:
             fig2.show()
 
             self.saving_plot(fig2, description="scatter_clip_counts_chr_{}_all_{}".format(chr_name, str(self.bin_size)))
+
+    def plot_sample(self, sample, cigar, ref_genome=False, ns=False, fig=go.Figure()):
+        """This method allows to obtain a scatter-plot of raw_read_counts
+        of all chromosomes, but for a specific sample of interest
+
+        Args:
+            ref_genome (bool): true if the reference is declared
+            sample (str): the name of the sample of interest (it corresponds
+                          to the name of the column in the data structure)
+            ns (bool): by default sets to False, but is one want to include
+                       the Ns count trace, it has to set to True
+            fig (obj): is a go.Figure() object for the building of the plot
+
+        Returns:
+            A scatter-plot of counts
+        """
+        fig.update_xaxes(title_text="Genome_Position")
+        fig.update_yaxes(title_text="Read_Count_Per_Bin")
+
+        hover_pos = self.read_counts["bin"] * self.bin_size
+
+        fig.add_trace(go.Scatter(x=list(self.read_counts.index * self.bin_size),  # otw it begins from 0 for any chr
+                                 y=self.read_counts[sample],
+                                 hovertext=hover_pos,  # useful to know the bin pos within the chromosome
+                                 hovertemplate=
+                                 "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
+                                 mode="markers",
+                                 name=sample))
+
+        # if ns:
+        #     self.add_ns_trace(fig, reference=reference)
+
+        self.scatter_layout(fig, title="Read Counts - Bin Size: {}"
+                                       "<br> Clone: {}".format(str(self.bin_size),
+                                                               sample))
+
+        self.plot_background(fig)
+
+        fig.show()
+
+        self.saving_plot(fig, description="scatter_counts_{}_{}".format(sample, str(self.bin_size)))
+
+        if cigar:
+            fig2 = go.Figure()
+            fig2.update_xaxes(title_text="Genome_Position")
+            fig2.update_yaxes(title_text="Read_Count_Per_Bin")
+
+            hover_pos = self.read_counts["bin"] * self.bin_size
+
+            fig2.add_trace(go.Scatter(x=list(self.read_counts.index * self.bin_size),
+                                      y=self.read_counts[sample + "_cig_filt"],
+                                      hovertext=hover_pos,  # useful to know the bin pos within the chromosome
+                                      hovertemplate=
+                                      "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
+                                      mode="markers",
+                                      name=sample + "_cig_filt"))
+
+            # if ns:
+            #     self.add_ns_trace(fig2, reference=reference)
+
+            self.scatter_layout(fig2, title="Clipped Read Counts - Bin Size: {}"
+                                            "<br> Clone: {}".format(str(self.bin_size),
+                                                                    sample))
+
+            self.plot_background(fig2)
+
+            fig2.show()
+
+            self.saving_plot(fig2, description="scatter_clip_counts_{}_{}".format(sample, str(self.bin_size)))
+
+    def plot_norm_sample(self, sample, cigar, ref_genome=False, ns=False, fig=go.Figure()):
+        """This method allows to obtain a scatter-plot of normalized_read_counts
+        in all chromosomes of a specific sample
+
+        Args:
+            ref_genome (bool): true if the reference is declared
+            sample (str): the name of the sample of interest (it corresponds
+                          to the name of the column in the data structure)
+            ns (bool): by default sets to False, but is one want to include
+                       the Ns count trace, it has to set to True
+            fig (obj): is a go.Figure() object for the building of the plot
+
+        Returns:
+            A scatter-plot of normalized counts
+        """
+        fig.update_xaxes(title_text="Genome_Position")
+        fig.update_yaxes(title_text="Norm_Read_Count_Per_Bin")
+
+        hover_pos = self.norm_counts["bin"] * self.bin_size
+
+        fig.add_trace(go.Scatter(x=list(self.norm_counts.index * self.bin_size),
+                                 y=self.norm_counts[sample],
+                                 hovertext=hover_pos,
+                                 hovertemplate=
+                                 "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y:.0f}",
+                                 mode="markers",
+                                 name=sample))
+
+        # if ns:
+        #     self.add_ns_trace(fig, reference=reference)
+
+        self.plot_background(fig)
+
+        self.scatter_layout(fig, title="Normalized Read Counts - Bin Size: {}"
+                                       "<br> Clone: {}".format(str(self.bin_size), sample))
+
+        fig.show()
+
+        self.saving_plot(fig, description="scatter_norm_counts_{}_{}".format(sample, str(self.bin_size)))
+
+        if cigar:
+            fig2 = go.Figure()
+            fig2.update_xaxes(title_text="Genome_Position")
+            fig2.update_yaxes(title_text="Norm_Clipped_Read_Count_Per_Bin")
+
+            hover_pos = self.norm_clip_counts["bin"] * self.bin_size
+
+            fig2.add_trace(go.Scatter(x=list(self.norm_clip_counts.index * self.bin_size),
+                                      y=self.norm_clip_counts[sample + "_cig_filt"],
+                                      hovertext=hover_pos,
+                                      hovertemplate=
+                                      "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y:.0f}",
+                                      mode="markers",
+                                      name=sample + "_cig_filt"))
+
+            # if ns:
+            #     self.add_ns_trace(fig2, reference=reference)
+
+            self.plot_background(fig2)
+
+            self.scatter_layout(fig2, title="Normalized Clipped Read Counts - Bin Size: {}"
+                                            "<br> Clone: {}".format(str(self.bin_size), sample))
+
+            fig2.show()
+
+            self.saving_plot(fig2, description="scatter_norm_clip_counts_{}_{}".format(sample, str(self.bin_size)))
 
     def fold_change_colors(self):
         colors = px.colors.qualitative.T10
@@ -831,3 +967,5 @@ class TestingBinReadVisualizer:
         fig.show()
 
         self.saving_plot(fig, description=description)
+
+
