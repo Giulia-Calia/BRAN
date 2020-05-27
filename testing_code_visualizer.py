@@ -93,7 +93,8 @@ class TestingBinReadVisualizer:
                                                   y0=0,
                                                   x1=tmp_end,
                                                   y1=1,
-                                                  fillcolor="rgb(245,245,245)",  # "rgb(240, 248, 255)",  # ~light_mint_green
+                                                  fillcolor="rgb(245,245,245)",
+                                                  # "rgb(240, 248, 255)",  # ~light_mint_green
                                                   opacity=0.5,
                                                   layer="below",
                                                   line_width=0))
@@ -470,7 +471,7 @@ class TestingBinReadVisualizer:
                                                                                         str(self.bin_size)))
 
     def plot_norm_chr_sample(self, chr_name, sample, cigar, ref_genome=False, ns=False,
-                                  fig=go.Figure()):
+                             fig=go.Figure()):
         """This method allows to obtain a scatter-plot of normalized_read_counts
         of a specific chromosome of a specific sample
 
@@ -541,6 +542,131 @@ class TestingBinReadVisualizer:
                                                                                              sample,
                                                                                              str(self.bin_size)))
 
+    def plot_chr(self, chr_name, cigar, ref_genome=False, ns=False, fig=go.Figure()):
+        """This method allows to obtain a scatter-plot of raw_read_counts
+        of all samples, but for a specific chromosome of interest
+
+        Args:
+            ref_genome (bool): true if the reference is declared
+            chr_name (int): a number representing the chromosome of interest
+            ns (bool): by default sets to False, but is one want to include
+                       the Ns count trace, it has to set to True
+            fig (obj): is a go.Figure() object for the building of the plot
+
+        Returns:
+            A scatter-plot of counts
+        """
+        fig.update_xaxes(title_text="Chromosomes_Position")
+        fig.update_yaxes(title_text="Read_Count_Per_Bin")
+
+        counts_chr = self.read_counts[self.read_counts["chr"].str.contains(chr_name) == True]
+        hover_pos = counts_chr["bin"] * self.bin_size
+        for col in counts_chr:
+            if col != "chr" and col != "bin" and "cig_filt" not in col:
+                fig.add_trace(go.Scatter(x=hover_pos,  # list(single_chrom.index * self.bin_size),
+                                         y=counts_chr[col],
+                                         hovertext=hover_pos,
+                                         hovertemplate=
+                                         "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
+                                         mode="markers",
+                                         name=col))
+        # if ns:
+        #     self.add_ns_trace(fig, reference=reference, chrom=chrom)
+
+        self.scatter_layout(fig, title="Read Counts - Bin Size: {} "
+                                       "<br> Chr: {}".format(str(self.bin_size),
+                                                             str(chr_name)))
+
+        fig.show()
+
+        self.saving_plot(fig, description="scatter_read_counts_{}_all_{}".format(str(chr_name),
+                                                                                 str(self.bin_size)))
+
+        if cigar:
+            fig2 = go.Figure()
+            fig2.update_xaxes(title_text="Chromosomes_Position")
+            fig2.update_yaxes(title_text="Read_Clipped_Count_Per_Bin")
+
+            for col in counts_chr:
+                if col != "chr" and col != "bin" and "cig_filt" in col:
+                    fig2.add_trace(go.Scatter(x=hover_pos,
+                                              y=counts_chr[col],
+                                              hovertext=hover_pos,
+                                              hovertemplate=
+                                              "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
+                                              mode="markers",
+                                              name=col))
+
+            self.scatter_layout(fig2, title="Clipped Read Counts - Bin Size: {} "
+                                            "<br> Chr: {}".format(str(self.bin_size),
+                                                                  str(chr_name)))
+
+            fig2.show()
+
+            self.saving_plot(fig2, description="scatter_clip_read_counts_{}_all_{}".format(str(chr_name),
+                                                                                           str(self.bin_size)))
+
+    def plot_norm_chr(self, chr_name, cigar, ref_genome=False, ns=False, fig=go.Figure()):
+        """This method allows to obtain a scatter-plot of normalized_read_counts
+        of a specific chromosome for all samples
+
+        Args:
+            ref_genome (bool): true if the reference is declared
+            chr_name (int): a number representing the chromosome of interest
+            ns (bool): by default sets to False, but is one want to include
+                       the Ns count trace, it has to set to True
+            fig (obj): is a go.Figure() object for the building of the plot
+
+        Returns:
+            A scatter-plot of normalized counts
+        """
+        fig.update_xaxes(title_text="Chromosome_position")
+        fig.update_yaxes(title_text="Norm_Read_Count_Per_Bin")
+
+        counts_chr = self.norm_counts[self.norm_counts["chr"].str.contains(chr_name) == True]
+        hover_pos = counts_chr["bin"] * self.bin_size
+        for col in counts_chr:
+            if col != "chr" and col != "bin":
+                fig.add_trace(go.Scatter(x=hover_pos,  # list(single_chrom.index * self.bin_size),
+                                         y=counts_chr[col],
+                                         hovertext=hover_pos,
+                                         hovertemplate=
+                                         "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y:.0f}",
+                                         mode="markers",
+                                         name=col))
+
+        # if ns:
+        #     self.add_ns_trace(fig, reference=reference, chrom=chrom)
+
+        self.scatter_layout(fig, title="Normalized Read Counts - Bin Size: {}"
+                                       "<br> Chr: {}".format(str(self.bin_size), chr_name))
+
+        fig.show()
+
+        self.saving_plot(fig, description="scatter_counts_chr_{}_all_{}".format(chr_name, str(self.bin_size)))
+
+        if cigar:
+            fig2 = go.Figure()
+            fig2.update_xaxes(title_text="Chromosome_position")
+            fig2.update_yaxes(title_text="Norm_Clip_Read_Count_Per_Bin")
+
+            clip_counts_chr = self.norm_clip_counts[self.norm_clip_counts["chr"].str.contains(chr_name) == True]
+            for col in clip_counts_chr:
+                if col != "chr" and col != "bin":
+                    fig2.add_trace(go.Scatter(x=hover_pos,  # list(single_chrom.index * self.bin_size),
+                                              y=clip_counts_chr[col],
+                                              hovertext=hover_pos,
+                                              hovertemplate=
+                                              "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y:.0f}",
+                                              mode="markers",
+                                              name=col))
+
+            self.scatter_layout(fig2, title="Normalized Clipped Read Counts - Bin Size: {}"
+                                            "<br> Chr: {}".format(str(self.bin_size), chr_name))
+
+            fig2.show()
+
+            self.saving_plot(fig2, description="scatter_clip_counts_chr_{}_all_{}".format(chr_name, str(self.bin_size)))
 
     def fold_change_colors(self):
         colors = px.colors.qualitative.T10

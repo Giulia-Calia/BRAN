@@ -505,59 +505,6 @@ class TestingBinReadAnalyzer:
         else:
             print("Sorry, to add this trace to the plot, you have to specify the reference file name\nPlease try again")
 
-    def plot_chromosome(self, saving_folder, reference, chrom, template, ns=False, fig=go.Figure()):  # , cigar
-        """This method allows to obtain a scatter-plot of raw_read_counts
-        of all samples, but for a specific chromosome of interest
-
-        Args:
-            reference (bool): true if the reference is declared
-            chrom (int): a number representing the chromosome of interest
-            ns (bool): by default sets to False, but is one want to include
-                       the Ns count trace, it has to set to True
-            fig (obj): is a go.Figure() object for the building of the plot
-
-        Returns:
-            A scatter-plot of counts
-        """
-        read_counts = self.parameters["read_counts"]
-
-        fig.update_xaxes(title_text="Chromosomes_Position")
-        fig.update_yaxes(title_text="Read_Count_Per_Bin")
-
-        c_name = None
-        for c in list(read_counts["chr"]):
-            if c.endswith(str(chrom)):
-                c_name = c
-
-        single_chrom = read_counts[read_counts["chr"] == c_name]
-        col_list = list(single_chrom.columns)
-        hover_pos = single_chrom["bin"] * self.bin_size
-        for i in range(len(col_list)):
-            if col_list[i] != "chr" and col_list[i] != "bin" and "cig_filt" not in col_list[i]:
-                fig.add_trace(go.Scatter(x=hover_pos,  # list(single_chrom.index * self.bin_size),
-                                         y=single_chrom[col_list[i]],
-                                         hovertext=hover_pos,
-                                         hovertemplate=
-                                         "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                         mode="markers",
-                                         name=str(col_list[i])))
-        if ns:
-            self.add_ns_trace(fig, reference=reference, chrom=chrom)
-
-        fig.update_layout(title="Read Counts - All Clones - Chr: " + str(chrom) +
-                                " - Bin Size: " + str(self.bin_size),
-                          template=template,
-                          legend_orientation="h")
-
-        # fig.show()
-        # save_fig = fig.write_image(saving_folder +
-        #                            "scatter_counts_chr_" +
-        #                            str(chrom) + "_" +
-        #                            str(self.bin_size) +
-        #                            ".jpeg",
-        #                            width=1280,
-        #                            height=1024)
-
     def plot_sample(self, saving_folder, reference, sample, template, ns=False, fig=go.Figure()):  # , cigar
         """This method allows to obtain a scatter-plot of raw_read_counts
         of all chromosomes, but for a specific sample of interest
@@ -605,116 +552,6 @@ class TestingBinReadAnalyzer:
         #                            "scatter_counts_" +
         #                            sample + "_" +
         #                            str(self.bin_size) + ".jpeg",
-        #                            width=1280,
-        #                            height=1024)
-
-    def plot_norm_data_chr_sample(self, saving_folder, reference, chrom, sample, template, ns=False,
-                                  fig=go.Figure()):  # , cigar
-        """This method allows to obtain a scatter-plot of normalized_read_counts
-        of a specific chromosome of a specific sample
-
-        Args:
-            reference (bool): true if the reference is declared
-            chrom (int): a number representing the chromosome of interest
-            sample (str): the name of the sample of interest (it corresponds
-                          to the name of the column in the data structure)
-            ns (bool): by default sets to False, but is one want to include
-                       the Ns count trace, it has to set to True
-            fig (obj): is a go.Figure() object for the building of the plot
-
-        Returns:
-            A scatter-plot of normalized counts
-        """
-        fig.update_xaxes(title_text="Chromosome_Position")
-        fig.update_yaxes(title_text="Norm_Read_Count_Per_Bin")
-
-        c_name = None
-        for c in self.norm["chr"].value_counts().index:
-            if c.endswith(str(chrom)):
-                c_name = c
-
-        single_chrom = self.norm[self.norm["chr"] == c_name]
-        hover_pos = single_chrom["bin"] * self.bin_size
-        for col in single_chrom:
-            if col == sample:
-                fig.add_trace(go.Scatter(x=hover_pos,  # list(single_chrom.index * self.bin_size),
-                                         y=single_chrom[col],
-                                         hovertext=hover_pos,
-                                         hovertemplate=
-                                         "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y:.0f}",
-                                         mode="markers",
-                                         name=col))
-        if ns:
-            self.add_ns_trace(fig, reference=reference, chrom=chrom)
-
-        fig.update_layout(title="Normalized Read Counts - Clone: " +
-                                sample +
-                                " - Chr: " +
-                                str(chrom) +
-                                " - Bin Size: " +
-                                str(self.bin_size),
-                          template=template,
-                          legend_orientation="h")
-
-        # fig.show()
-
-        # save_fig = fig.write_image(saving_folder + "scatter_norm_counts_chr_" +
-        #                            str(chrom) + "_" +
-        #                            sample + "_" +
-        #                            str(self.bin_size) + ".jpeg",
-        #                            width=1280,
-        #                            height=1024)
-
-    def plot_norm_data_chr(self, saving_folder, reference, chrom, template, ns=False, fig=go.Figure()):  # , cigar
-        """This method allows to obtain a scatter-plot of normalized_read_counts
-        of a specific chromosome for all samples
-
-        Args:
-            reference (bool): true if the reference is declared
-            chrom (int): a number representing the chromosome of interest
-            ns (bool): by default sets to False, but is one want to include
-                       the Ns count trace, it has to set to True
-            fig (obj): is a go.Figure() object for the building of the plot
-
-        Returns:
-            A scatter-plot of normalized counts
-        """
-        fig.update_xaxes(title_text="Chromosome_position")
-        fig.update_yaxes(title_text="Norm_Read_Count_Per_Bin")
-
-        c_name = None
-        for c in self.norm["chr"].value_counts().index:
-            if c.endswith(str(chrom)):
-                c_name = c
-
-        single_chrom = self.norm[self.norm["chr"] == c_name]
-        hover_pos = single_chrom["bin"] * self.bin_size
-        for col in single_chrom:
-            if col != "chr" and col != "bin":
-                fig.add_trace(go.Scatter(x=hover_pos,  # list(single_chrom.index * self.bin_size),
-                                         y=single_chrom[col],
-                                         hovertext=hover_pos,
-                                         hovertemplate=
-                                         "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y:.0f}",
-                                         mode="markers",
-                                         name=col))
-        if ns:
-            self.add_ns_trace(fig, reference=reference, chrom=chrom)
-
-        fig.update_layout(title="Normalized Read Counts - Clone: all - Chr: " +
-                                str(chrom) +
-                                " - Bin Size: " +
-                                str(self.bin_size),
-                          template=template,
-                          legend_orientation="h")
-
-        # fig.show()
-        #
-        # save_fig = fig.write_image(saving_folder +
-        #                            "scatter_norm_counts_chr_" +
-        #                            str(chrom) + "_" +
-        #                            str(self.bin_size) +
-        #                            ".jpeg",
         #                            width=1280,
         #                            height=1024)
 
@@ -1010,12 +847,8 @@ class TestingBinReadAnalyzer:
         # fig = go.Figure()
         # visualizer.plot_background(fig)
         # visualizer.add_threshold_fc(fig, fc)
-        visualizer.plot_norm_chr_sample(chr_name, sample, cigar)
-        print("\nok10")
-        visualizer.plot_norm_scatter(ref_genome)
-        print("\nok4")
-        visualizer.plot_chr_sample(chr_name, sample, cigar)
-        print("\nok9")
+        visualizer.plot_norm_chr(chr_name, cigar)
+        print("\nok12")
         exit(1)
 
         visualizer.plot_violin()
@@ -1038,6 +871,10 @@ class TestingBinReadAnalyzer:
         print("\nok9")
         visualizer.plot_norm_chr_sample(chr_name, sample, cigar)
         print("\nok10")
+        visualizer.plot_chr(chr_name, cigar)
+        print("\nok11")
+        visualizer.plot_norm_chr(chr_name, cigar)
+        print("\nok12")
 
 if __name__ == "__main__":
 
