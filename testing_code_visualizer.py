@@ -120,18 +120,18 @@ class TestingBinReadVisualizer:
                                  showlegend=False,
                                  ))
 
-    def add_threshold_fc(self, fig, fc):
+    def add_threshold_fc(self, fig, fc, len_x_axis):
 
         fig.add_shape(go.layout.Shape(type="line",
                                       x0=0,
                                       y0=fc,
-                                      x1=len(self.read_counts) * self.bin_size,
+                                      x1=len_x_axis * self.bin_size,
                                       y1=fc))
 
         fig.add_shape(go.layout.Shape(type="line",
                                       x0=0,
                                       y0=-fc,
-                                      x1=len(self.read_counts) * self.bin_size,
+                                      x1=len_x_axis * self.bin_size,
                                       y1=-fc))
 
         fig.update_shapes(dict(xref="x",
@@ -467,8 +467,8 @@ class TestingBinReadVisualizer:
             fig2.show()
 
             self.saving_plot(fig2, description="scatter_clip_counts_{}_{}_{}".format(str(chr_name),
-                                                                                        sample,
-                                                                                        str(self.bin_size)))
+                                                                                     sample,
+                                                                                     str(self.bin_size)))
 
     def plot_norm_chr_sample(self, chr_name, sample, cigar, ref_genome=False, ns=False,
                              fig=go.Figure()):
@@ -539,8 +539,8 @@ class TestingBinReadVisualizer:
             fig2.show()
 
             self.saving_plot(fig2, description="scatter_norm_clip_counts_{}_{}_{}".format(str(chr_name),
-                                                                                             sample,
-                                                                                             str(self.bin_size)))
+                                                                                          sample,
+                                                                                          str(self.bin_size)))
 
     def plot_chr(self, chr_name, cigar, ref_genome=False, ns=False, fig=go.Figure()):
         """This method allows to obtain a scatter-plot of raw_read_counts
@@ -811,6 +811,27 @@ class TestingBinReadVisualizer:
         self.template.layout["colorway"] = colors
         return self.template
 
+    # def fold_change_trace(self, fig,  x, y, hover_text, trace_name):
+    #
+    #     fig.add_trace(go.Scatter(x=list(sig_bins.index * self.bin_size),
+    #                              y=sig_bins[col],
+    #                              mode="markers",
+    #                              hovertext=hover_pos_sig,
+    #                              hovertemplate=
+    #                              "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
+    #                              name=col[:col.find("-")]))
+    #     fig.add_trace(go.Scatter(x=list(no_sig_bins.index * self.bin_size),
+    #                              y=no_sig_bins[col],
+    #                              mode="markers",
+    #                              marker=dict(size=5, color="rgb(176, 196, 222)"),
+    #                              hovertext=hover_pos_no_sig,
+    #                              hovertemplate=
+    #                              "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
+    #                              # showlegend=False,
+    #                              # legendgroup="group",
+    #                              # name=col[:col.find("_Illumina")] + "_no_significant"))
+    #                              name=col[:col.find("-")] + "_no_significant"))
+
     def plot_fold_change(self, fc, pairwise, control_name):
         """"""
         fig = go.Figure()
@@ -882,7 +903,7 @@ class TestingBinReadVisualizer:
                                             colors=colors)
                     description = "fold_change_" + str(self.bin_size)
 
-        self.add_threshold_fc(fig, fc)
+        self.add_threshold_fc(fig, fc, len(self.fold_change))
         self.plot_background(fig)
 
         fig.show()
@@ -907,14 +928,14 @@ class TestingBinReadVisualizer:
 
                 hover_pos_sig = sig_clip_bins["bin"] * self.bin_size
                 hover_pos_no_sig = no_sig_clip_bins["bin"] * self.bin_size
-
                 if pairwise:
                     fig.add_trace(go.Scatter(x=list(sig_clip_bins.index * self.bin_size),
                                              y=sig_clip_bins[col],
                                              mode="markers",
                                              hovertext=hover_pos_sig,
                                              hovertemplate=
-                                             "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
+                                             "<b>Chrom_position</b>: %{hovertext:,}" +
+                                             "<br>Count: %{y}",
                                              # legendgroup="group",
                                              name=col[:col.find("-")]))
                     fig.add_trace(go.Scatter(x=list(no_sig_clip_bins.index * self.bin_size),
@@ -961,11 +982,338 @@ class TestingBinReadVisualizer:
 
                     description = "clip_fold_change_" + str(self.bin_size)
 
-        self.add_threshold_fc(fig, fc)
+        self.add_threshold_fc(fig, fc, len_x_axis=len(self.clip_fold_change))
         self.plot_background(fig)
 
         fig.show()
 
         self.saving_plot(fig, description=description)
 
+    def plot_fold_change_chr_sample(self, pairwise, fc, chr_name, sample, control_name, cigar):
+        """"""
+        if pairwise:
+            sample_pw = sample + "-" + control_name
+            fig = go.Figure()
 
+            fig.update_xaxes(title_text="Chromosome_Position")
+            fig.update_yaxes(title_text="Fold-Change")
+
+            fc_chr = self.fold_change[self.fold_change["chr"].str.contains(chr_name) == True]
+
+            sig_bins_pos = fc_chr[fc_chr[sample_pw] > fc]
+            sig_bins_neg = fc_chr[fc_chr[sample_pw] < -fc]
+            sig_bins = pd.concat([sig_bins_pos, sig_bins_neg])
+            not_sig_bins = fc_chr.drop(list(sig_bins_pos.index) + list(sig_bins_neg.index))
+
+            hover_pos_sig = sig_bins["bin"] * self.bin_size
+            hover_pos_no_sig = not_sig_bins["bin"] * self.bin_size
+
+            fig.add_trace(go.Scatter(x=hover_pos_sig,  # list(sig_data.index * self.bin_size),
+                                     y=sig_bins[sample_pw],
+                                     mode="markers",
+                                     hovertext=hover_pos_sig,
+                                     hovertemplate=
+                                     "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
+                                     name=sample))
+            fig.add_trace(go.Scatter(x=hover_pos_no_sig,  # list(not_sig_data.index * self.bin_size),
+                                     y=not_sig_bins[sample_pw],
+                                     mode="markers",
+                                     marker=dict(size=5, color="rgb(176, 196, 222)"),  # gray
+                                     hovertext=hover_pos_no_sig,
+                                     hovertemplate=
+                                     "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
+                                     legendgroup="group",
+                                     name=sample + "_not_sig"))
+
+            self.fold_change_layout(fig,
+                                    title="Pairwise Fold Change {} <i>vs</i> {}"
+                                          "<br> Bin Size: {} - Threshold_FC: {} "
+                                          "- Chr: {} ".format(sample,
+                                                              control_name,
+                                                              str(self.bin_size),
+                                                              fc,
+                                                              chr_name),
+                                    colors=self.fold_change_colors())
+
+            x_axis = len(sig_bins) + len(not_sig_bins)
+            self.add_threshold_fc(fig, fc, x_axis)
+
+            fig.show()
+
+            self.saving_plot(fig, description="pw_fc_{}_{}_{}".format(chr_name, sample_pw, str(self.bin_size)))
+
+            if cigar:
+                sample_clip = sample + "_cig_filt-" + control_name
+                fig2 = go.Figure()
+
+                fig2.update_xaxes(title_text="Chromosome_Position")
+                fig2.update_yaxes(title_text="Clipped_log2_Fold-Change")
+
+                fc_chr = self.clip_fold_change[self.clip_fold_change["chr"].str.contains(chr_name) == True]
+
+                sig_bins_pos = fc_chr[fc_chr[sample_clip] > fc]
+                sig_bins_neg = fc_chr[fc_chr[sample_clip] < -fc]
+                sig_bins = pd.concat([sig_bins_pos, sig_bins_neg])
+                not_sig_bins = fc_chr.drop(list(sig_bins_pos.index) + list(sig_bins_neg.index))
+
+                hover_pos_sig = sig_bins["bin"] * self.bin_size
+                hover_pos_no_sig = not_sig_bins["bin"] * self.bin_size
+
+                fig2.add_trace(go.Scatter(x=hover_pos_sig,  # list(sig_data.index * self.bin_size),
+                                          y=sig_bins[sample_clip],
+                                          mode="markers",
+                                          hovertext=hover_pos_sig,
+                                          hovertemplate=
+                                          "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
+                                          name=sample + "_cig_filt"))
+                fig2.add_trace(go.Scatter(x=hover_pos_no_sig,  # list(not_sig_data.index * self.bin_size),
+                                          y=not_sig_bins[sample_clip],
+                                          mode="markers",
+                                          marker=dict(size=5, color="rgb(176, 196, 222)"),  # gray
+                                          hovertext=hover_pos_no_sig,
+                                          hovertemplate=
+                                          "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
+                                          name=sample + "_cig_filt_<b>not_sig</b>"))
+
+                self.fold_change_layout(fig2,
+                                        title="{} <i>vs</i> {} - Chr: {} "
+                                              "<br> Clipped Pairwise Fold Change - "
+                                              "Bin Size: {} - Threshold_FC: {} ".format(sample,
+                                                                                        control_name,
+                                                                                        chr_name,
+                                                                                        str(self.bin_size),
+                                                                                        fc),
+                                        colors=self.fold_change_colors())
+
+                x_axis = len(sig_bins) + len(not_sig_bins)
+                self.add_threshold_fc(fig2, fc, x_axis)
+
+                fig2.show()
+
+                self.saving_plot(fig2, description="clipped_pw_fc_{}_{}_{}".format(chr_name,
+                                                                                   sample_clip,
+                                                                                   str(self.bin_size)))
+        else:
+            print("""ATTENTION: if parameter '-pw' not given, its impossible to retrieve graphical information 
+                  on single sample fold-change. \nPlease TRY AGAIN specifying '-pw' or '--pairwise' in command line""")
+
+    def plot_fold_change_chr(self, pairwise, fc, chr_name, control_name, cigar):
+        """"""
+        fig = go.Figure()
+        fig.update_xaxes(title_text="Chromosome_Position")
+        fig.update_yaxes(title_text="log2_Fold-Change")
+
+        fig2 = go.Figure()
+        fig2.update_xaxes(title_text="Chromosome_Position")
+        fig2.update_yaxes(title_text="Clipped_log2_Fold-Change")
+
+        fc_chr = self.fold_change[self.fold_change["chr"].str.contains(chr_name) == True]
+        clip_fc_chr = self.clip_fold_change[self.clip_fold_change["chr"].str.contains(chr_name) == True]
+
+        for col in fc_chr:
+            if col != "chr" and col != "bin":
+                sig_bins_pos = fc_chr[fc_chr[col] > fc]
+                sig_bins_neg = fc_chr[fc_chr[col] < -fc]
+                sig_bins = pd.concat([sig_bins_pos, sig_bins_neg])
+                not_sig_bins = fc_chr.drop(list(sig_bins_pos.index) + list(sig_bins_neg.index))
+
+                hover_pos_sig = sig_bins["bin"] * self.bin_size
+                hover_pos_no_sig = not_sig_bins["bin"] * self.bin_size
+
+                fig.add_trace(go.Scatter(x=hover_pos_sig,  # list(sig_data.index * self.bin_size),
+                                         y=sig_bins[col],
+                                         mode="markers",
+                                         hovertext=hover_pos_sig,
+                                         hovertemplate=
+                                         "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
+                                         name=col[:col.find("-")]))
+                fig.add_trace(go.Scatter(x=hover_pos_no_sig,  # list(not_sig_data.index * self.bin_size),
+                                         y=not_sig_bins[col],
+                                         mode="markers",
+                                         marker=dict(size=5, color="rgb(176, 196, 222)"),
+                                         hovertext=hover_pos_no_sig,
+                                         hovertemplate=
+                                         "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
+                                         legendgroup="group",
+                                         name=col[:col.find("-")] + "_<b>not_sig</b>"))
+
+        if cigar:
+            for col in clip_fc_chr:
+                if col != "chr" and col != "bin":
+                    sig_bins_pos = clip_fc_chr[clip_fc_chr[col] > fc]
+                    sig_bins_neg = clip_fc_chr[clip_fc_chr[col] < -fc]
+                    sig_bins = pd.concat([sig_bins_pos, sig_bins_neg])
+                    not_sig_bins = clip_fc_chr.drop(list(sig_bins_pos.index) + list(sig_bins_neg.index))
+
+                    hover_pos_sig = sig_bins["bin"] * self.bin_size
+                    hover_pos_no_sig = not_sig_bins["bin"] * self.bin_size
+
+                    fig2.add_trace(go.Scatter(x=hover_pos_sig,  # list(sig_data.index * self.bin_size),
+                                              y=sig_bins[col],
+                                              mode="markers",
+                                              hovertext=hover_pos_sig,
+                                              hovertemplate=
+                                              "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
+                                              name=col[:col.find("-")]))
+                    fig2.add_trace(go.Scatter(x=hover_pos_no_sig,  # list(not_sig_data.index * self.bin_size),
+                                              y=not_sig_bins[col],
+                                              mode="markers",
+                                              marker=dict(size=5, color="rgb(176, 196, 222)"),
+                                              hovertext=hover_pos_no_sig,
+                                              hovertemplate=
+                                              "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
+                                              legendgroup="group",
+                                              name=col[:col.find("-")] + "_<b>not_sig</b>"))
+
+        self.add_threshold_fc(fig, fc, len_x_axis=len(fc_chr))
+        self.add_threshold_fc(fig2, fc, len_x_axis=len(clip_fc_chr))
+
+        if pairwise:
+
+            self.fold_change_layout(fig,
+                                    title="Pairwise Fold Change Each <i>vs</i> {}"
+                                          "<br> Bin Size: {} - Threshold_FC:  {} "
+                                          "- Chr: {}".format(control_name,
+                                                             str(self.bin_size),
+                                                             fc,
+                                                             chr_name),
+                                    colors=self.fold_change_colors())
+
+            self.fold_change_layout(fig2,
+                                    title="Clipped Pairwise Fold Change Each <i>vs</i> {}"
+                                          "<br> Bin Size: {} - Threshold_FC:  {} "
+                                          "- Chr: {}".format(control_name,
+                                                             str(self.bin_size),
+                                                             fc,
+                                                             chr_name),
+                                    colors=self.fold_change_colors())
+
+            self.saving_plot(fig, description="pw_fc_{}_{}".format(chr_name, str(self.bin_size)))
+            self.saving_plot(fig2, description="clip_pw_fc_{}_{}".format(chr_name, str(self.bin_size)))
+
+        else:
+            self.fold_change_layout(fig,
+                                    title="Fold Change All Mean <i>vs</i> {}"
+                                          "<br> Bin Size: {} - Threshold_FC:  {} "
+                                          "- Chr: {}".format(control_name,
+                                                             str(self.bin_size),
+                                                             fc,
+                                                             chr_name),
+                                    colors=self.fold_change_colors())
+
+            self.fold_change_layout(fig2,
+                                    title="Clipped Fold Change All Mean <i>vs</i> {}"
+                                          "<br> Bin Size: {} - Threshold_FC:  {} "
+                                          "- Chr: {}".format(control_name,
+                                                             str(self.bin_size),
+                                                             fc,
+                                                             chr_name),
+                                    colors=self.fold_change_colors())
+
+            self.saving_plot(fig, description="fc_{}_{}".format(chr_name, str(self.bin_size)))
+            self.saving_plot(fig2, description="clip_fc_{}_{}".format(chr_name, str(self.bin_size)))
+
+        fig.show()
+
+        fig2.show()
+
+    def plot_fold_change_sample(self, pairwise, fc, sample, control_name, cigar):
+        """"""
+        if pairwise:
+            fig = go.Figure()
+
+            fig.update_xaxes(title_text="Genome_Position")
+            fig.update_yaxes(title_text="Fold_change")
+
+            col = sample + "-" + control_name
+            sig_bins_pos = self.fold_change[["chr", "bin", col]][self.fold_change[col] > fc]
+            sig_bins_neg = self.fold_change[["chr", "bin", col]][self.fold_change[col] < -fc]
+            sig_bins = pd.concat([sig_bins_pos, sig_bins_neg])
+            not_sig_bins = self.fold_change[["chr", "bin", col]].drop(list(sig_bins_pos.index) +
+                                                                      list(sig_bins_neg.index))
+
+            hover_pos_sig = sig_bins["bin"] * self.bin_size
+            hover_pos_no_sig = not_sig_bins["bin"] * self.bin_size
+
+            fig.add_trace(go.Scatter(x=list(sig_bins.index * self.bin_size),
+                                     y=sig_bins[col],
+                                     mode="markers",
+                                     hovertext=hover_pos_sig,
+                                     hovertemplate=
+                                     "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
+                                     name=sample))
+            fig.add_trace(go.Scatter(x=list(not_sig_bins.index * self.bin_size),
+                                     y=not_sig_bins[col],
+                                     mode="markers",
+                                     marker=dict(size=5, color="rgb(176, 196, 222)"),
+                                     hovertext=hover_pos_no_sig,
+                                     hovertemplate=
+                                     "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
+                                     legendgroup="group",
+                                     name=sample + "_not_sig"))
+
+            self.fold_change_layout(fig, title="Pairwise Fold Change - All Chromosomes - Bin Size: {} "
+                                               "- Threshold_fc: {} <br> {} <i>vs</i> {}".format(str(self.bin_size),
+                                                                                                fc,
+                                                                                                sample,
+                                                                                                control_name),
+                                    colors=self.fold_change_colors())
+
+            self.add_threshold_fc(fig, fc, len_x_axis=len(self.fold_change[col]))
+            self.plot_background(fig)
+
+            fig.show()
+
+            self.saving_plot(fig, description="pw_fc_{}_{}".format(sample, str(self.bin_size)))
+
+            if cigar:
+                sample_clip = sample + "_cig_filt-" + control_name
+                fig2 = go.Figure()
+
+                fig2.update_xaxes(title_text="Chromosome_Position")
+                fig2.update_yaxes(title_text="Clipped_log2_Fold-Change")
+
+                sig_bins_pos = self.clip_fold_change[["chr", "bin", sample_clip]][self.clip_fold_change[sample_clip] > fc]
+                sig_bins_neg = self.clip_fold_change[["chr", "bin", sample_clip]][self.clip_fold_change[sample_clip] < -fc]
+                sig_bins = pd.concat([sig_bins_pos, sig_bins_neg])
+                not_sig_bins = self.clip_fold_change[["chr", "bin", sample_clip]].drop(list(sig_bins_pos.index) +
+                                                                          list(sig_bins_neg.index))
+
+                hover_pos_sig = sig_bins["bin"] * self.bin_size
+                hover_pos_no_sig = not_sig_bins["bin"] * self.bin_size
+
+                fig2.add_trace(go.Scatter(x=list(sig_bins.index * self.bin_size),  # list(sig_data.index * self.bin_size),
+                                          y=sig_bins[sample_clip],
+                                          mode="markers",
+                                          hovertext=hover_pos_sig,
+                                          hovertemplate=
+                                          "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
+                                          name=sample + "_cig_filt"))
+                fig2.add_trace(go.Scatter(x=list(not_sig_bins.index * self.bin_size),  # list(not_sig_data.index * self.bin_size),
+                                          y=not_sig_bins[sample_clip],
+                                          mode="markers",
+                                          marker=dict(size=5, color="rgb(176, 196, 222)"),  # gray
+                                          hovertext=hover_pos_no_sig,
+                                          hovertemplate=
+                                          "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
+                                          name=sample + "_cig_filt_<b>not_sig</b>"))
+
+                self.fold_change_layout(fig2,
+                                        title="{} <i>vs</i> {}"
+                                              "<br> Clipped Pairwise Fold Change - "
+                                              "Bin Size: {} - Threshold_FC: {} ".format(sample,
+                                                                                        control_name,
+                                                                                        str(self.bin_size),
+                                                                                        fc),
+                                        colors=self.fold_change_colors())
+
+                self.add_threshold_fc(fig2, fc, len_x_axis=len(self.clip_fold_change))
+                self.plot_background(fig2)
+                fig2.show()
+
+                self.saving_plot(fig2, description="clipped_pw_fc_{}_{}".format(sample_clip,
+                                                                                str(self.bin_size)))
+
+        else:
+            print("""ATTENTION: if parameter '-pw' not given, its impossible to retrieve graphical information 
+                  on single sample fold-change. \nPlease TRY AGAIN specifying '-pw' or '--pairwise' in command line""")

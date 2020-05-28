@@ -748,10 +748,16 @@ class TestingBinReadAnalyzer:
         # visualizer.add_threshold_fc(fig, fc)
         # visualizer.plot_scatter(ref_genome)
         # print("\nok3")
-        visualizer.plot_norm_clipped_scatter(ref_genome)
-        print("\nok4")
-        visualizer.plot_norm_sample(sample, cigar)
-        print("\nok14")
+        # visualizer.plot_fold_change(fc, pairwise, control_name)
+        # print("\nok5")
+        visualizer.plot_clip_fold_change(fc, pairwise, control_name)
+        print("\nok6")
+        # visualizer.plot_fold_change_chr_sample(pairwise, fc, chr_name, sample, control_name, cigar)
+        # print("\nok15")
+        # visualizer.plot_fold_change_chr(pairwise, fc, chr_name, control_name, cigar)
+        # print("\nok16")
+        visualizer.plot_fold_change_sample(pairwise, fc, sample, control_name, cigar)
+        print("\nok17")
         exit(1)
 
         visualizer.plot_violin()
@@ -782,6 +788,13 @@ class TestingBinReadAnalyzer:
         print("\nok13")
         visualizer.plot_norm_sample(sample, cigar)
         print("\nok14")
+        visualizer.plot_fold_change_chr_sample(pairwise, fc, chr_name, sample, control_name, cigar)
+        print("\nok15")
+        visualizer.plot_fold_change_chr(pairwise, fc, chr_name, control_name, cigar)
+        print("\nok16")
+        visualizer.plot_fold_change_sample(pairwise, fc, sample, control_name, cigar)
+        print("\nok17")
+
 
 if __name__ == "__main__":
 
