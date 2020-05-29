@@ -811,26 +811,40 @@ class TestingBinReadVisualizer:
         self.template.layout["colorway"] = colors
         return self.template
 
-    # def fold_change_trace(self, fig,  x, y, hover_text, trace_name):
-    #
-    #     fig.add_trace(go.Scatter(x=list(sig_bins.index * self.bin_size),
-    #                              y=sig_bins[col],
-    #                              mode="markers",
-    #                              hovertext=hover_pos_sig,
-    #                              hovertemplate=
-    #                              "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-    #                              name=col[:col.find("-")]))
-    #     fig.add_trace(go.Scatter(x=list(no_sig_bins.index * self.bin_size),
-    #                              y=no_sig_bins[col],
-    #                              mode="markers",
-    #                              marker=dict(size=5, color="rgb(176, 196, 222)"),
-    #                              hovertext=hover_pos_no_sig,
-    #                              hovertemplate=
-    #                              "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-    #                              # showlegend=False,
-    #                              # legendgroup="group",
-    #                              # name=col[:col.find("_Illumina")] + "_no_significant"))
-    #                              name=col[:col.find("-")] + "_no_significant"))
+    def fold_change_traces(self, pairwise, fig, x_sig, y_sig,
+                           x_no_sig, y_no_sig,  marker_dict, hover_sig, hover_no_sig, trace_name):
+
+        if pairwise:
+            fig.add_trace(go.Scatter(x=x_sig,
+                                     y=y_sig,
+                                     mode="markers",
+                                     hovertext=hover_sig,
+                                     hovertemplate="<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
+                                     name=trace_name))
+
+            fig.add_trace(go.Scatter(x=x_no_sig,
+                                     y=y_no_sig,
+                                     mode="markers",
+                                     marker=marker_dict,
+                                     hovertext=hover_no_sig,
+                                     hovertemplate="<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
+                                     name=trace_name + "_<b>not_significant</b>"))
+
+        else:
+            fig.add_trace(go.Scatter(x=x_sig,
+                                     y=y_sig,
+                                     mode="markers",
+                                     hovertext=hover_sig,
+                                     hovertemplate="<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
+                                     name="Significant Differences"))
+
+            fig.add_trace(go.Scatter(x=x_no_sig,
+                                     y=y_no_sig,
+                                     mode="markers",
+                                     marker=marker_dict,
+                                     hovertext=hover_no_sig,
+                                     hovertemplate="<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
+                                     name="Not Significant Differences"))
 
     def plot_fold_change(self, fc, pairwise, control_name):
         """"""
@@ -850,26 +864,14 @@ class TestingBinReadVisualizer:
                 hover_pos_sig = sig_bins["bin"] * self.bin_size
                 hover_pos_no_sig = no_sig_bins["bin"] * self.bin_size
 
-                if pairwise:
-                    fig.add_trace(go.Scatter(x=list(sig_bins.index * self.bin_size),
-                                             y=sig_bins[col],
-                                             mode="markers",
-                                             hovertext=hover_pos_sig,
-                                             hovertemplate=
-                                             "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                             name=col[:col.find("-")]))
-                    fig.add_trace(go.Scatter(x=list(no_sig_bins.index * self.bin_size),
-                                             y=no_sig_bins[col],
-                                             mode="markers",
-                                             marker=dict(size=5, color="rgb(176, 196, 222)"),
-                                             hovertext=hover_pos_no_sig,
-                                             hovertemplate=
-                                             "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                             # showlegend=False,
-                                             # legendgroup="group",
-                                             # name=col[:col.find("_Illumina")] + "_no_significant"))
-                                             name=col[:col.find("-")] + "_no_significant"))
+                x_axis_sig = list(sig_bins.index * self.bin_size)
+                x_axis_no_sig = list(no_sig_bins.index * self.bin_size)
+                marker_color = dict(size=5, color="rgb(176, 196, 222)")
 
+                self.fold_change_traces(pairwise, fig, x_sig=x_axis_sig, y_sig=sig_bins[col], x_no_sig=x_axis_no_sig,
+                                        y_no_sig=no_sig_bins[col], marker_dict=marker_color, hover_sig=hover_pos_sig,
+                                        hover_no_sig=hover_pos_no_sig, trace_name=col[:col.find("-")])
+                if pairwise:
                     self.fold_change_layout(fig,
                                             title="Each <i>vs</i> {}<br>Pairwise log2 Fold Change - Bin Size: {} - "
                                                   "Threshold_FC: ".format(control_name,
@@ -877,26 +879,10 @@ class TestingBinReadVisualizer:
                                                                           str(fc)),
                                             colors=colors)
                     description = "pw_fold_change_" + str(self.bin_size)
-                else:
-                    fig.add_trace(go.Scatter(x=list(sig_bins.index * self.bin_size),
-                                             y=sig_bins[col],
-                                             mode="markers",
-                                             hovertext=hover_pos_sig,
-                                             hovertemplate=
-                                             "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                             name="Significant Differences"))
-                    fig.add_trace(go.Scatter(x=list(no_sig_bins.index * self.bin_size),
-                                             y=no_sig_bins[col],
-                                             mode="markers",
-                                             marker=dict(size=5, color="rgb(176, 196, 222)"),
-                                             hovertext=hover_pos_no_sig,
-                                             hovertemplate=
-                                             "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                             # legendgroup="group",
-                                             # showlegend=False,
-                                             name="Not Significant Differences"))
 
-                    self.fold_change_layout(fig, title="All <i>vs</i> {}<br> log2 Fold Change - Bin Size: {} - "
+                else:
+
+                    self.fold_change_layout(fig, title="All Mean <i>vs</i> {}<br>log2 Fold Change - Bin Size: {} - "
                                                        "Threshold_FC: ".format(control_name,
                                                                                str(self.bin_size),
                                                                                str(fc)),
@@ -928,26 +914,16 @@ class TestingBinReadVisualizer:
 
                 hover_pos_sig = sig_clip_bins["bin"] * self.bin_size
                 hover_pos_no_sig = no_sig_clip_bins["bin"] * self.bin_size
-                if pairwise:
-                    fig.add_trace(go.Scatter(x=list(sig_clip_bins.index * self.bin_size),
-                                             y=sig_clip_bins[col],
-                                             mode="markers",
-                                             hovertext=hover_pos_sig,
-                                             hovertemplate=
-                                             "<b>Chrom_position</b>: %{hovertext:,}" +
-                                             "<br>Count: %{y}",
-                                             # legendgroup="group",
-                                             name=col[:col.find("-")]))
-                    fig.add_trace(go.Scatter(x=list(no_sig_clip_bins.index * self.bin_size),
-                                             y=no_sig_clip_bins[col],
-                                             mode="markers",
-                                             marker=dict(size=5, color="rgb(176, 196, 222)"),
-                                             hovertext=hover_pos_no_sig,
-                                             hovertemplate=
-                                             "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                             # legendgroup="group",
-                                             name=col[:col.find("-")] + "_no_significant"))
+                x_axis_sig = list(sig_clip_bins.index * self.bin_size)
+                x_axis_no_sig = list(no_sig_clip_bins.index * self.bin_size)
+                marker_color = dict(size=5, color="rgb(176, 196, 222)")
 
+                self.fold_change_traces(pairwise, fig, x_sig=x_axis_sig, y_sig=sig_clip_bins[col],
+                                        x_no_sig=x_axis_no_sig, y_no_sig=no_sig_clip_bins[col], marker_dict=marker_color,
+                                        hover_sig=hover_pos_sig, hover_no_sig=hover_pos_no_sig,
+                                        trace_name=col[:col.find("-")])
+
+                if pairwise:
                     self.fold_change_layout(fig,
                                             title="Each <i>vs</i> {}<br>".format(control_name) +
                                                   "Clipped Reads Pairwise log2 Fold Change - " +
@@ -957,22 +933,6 @@ class TestingBinReadVisualizer:
                     description = "pw_clip_fold_change_" + str(self.bin_size)
 
                 else:
-                    fig.add_trace(go.Scatter(x=list(sig_clip_bins.index * self.bin_size),
-                                             y=sig_clip_bins[col],
-                                             mode="markers",
-                                             hovertext=hover_pos_sig,
-                                             hovertemplate=
-                                             "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                             name="Significant Differences"))
-                    fig.add_trace(go.Scatter(x=list(no_sig_clip_bins.index * self.bin_size),
-                                             y=no_sig_clip_bins[col],
-                                             mode="markers",
-                                             marker=dict(size=5, color="rgb(176, 196, 222)"),
-                                             hovertext=hover_pos_no_sig,
-                                             hovertemplate=
-                                             "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                             # legendgroup="group",
-                                             name="Not Significant Differences"))
 
                     self.fold_change_layout(fig,
                                             title="All <i>vs</i> {}<br>".format(control_name) +
@@ -1005,25 +965,14 @@ class TestingBinReadVisualizer:
             sig_bins = pd.concat([sig_bins_pos, sig_bins_neg])
             not_sig_bins = fc_chr.drop(list(sig_bins_pos.index) + list(sig_bins_neg.index))
 
-            hover_pos_sig = sig_bins["bin"] * self.bin_size
+            hover_pos_sig = sig_bins["bin"] * self.bin_size  # no needs for the list because only one chr
             hover_pos_no_sig = not_sig_bins["bin"] * self.bin_size
+            marker_color = dict(size=5, color="rgb(176, 196, 222)")
 
-            fig.add_trace(go.Scatter(x=hover_pos_sig,  # list(sig_data.index * self.bin_size),
-                                     y=sig_bins[sample_pw],
-                                     mode="markers",
-                                     hovertext=hover_pos_sig,
-                                     hovertemplate=
-                                     "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                     name=sample))
-            fig.add_trace(go.Scatter(x=hover_pos_no_sig,  # list(not_sig_data.index * self.bin_size),
-                                     y=not_sig_bins[sample_pw],
-                                     mode="markers",
-                                     marker=dict(size=5, color="rgb(176, 196, 222)"),  # gray
-                                     hovertext=hover_pos_no_sig,
-                                     hovertemplate=
-                                     "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                     legendgroup="group",
-                                     name=sample + "_not_sig"))
+            self.fold_change_traces(pairwise, fig, x_sig=hover_pos_sig, y_sig=sig_bins[sample_pw],
+                                    x_no_sig=hover_pos_no_sig, y_no_sig=not_sig_bins[sample_pw],
+                                    marker_dict=marker_color, hover_sig=hover_pos_sig,
+                                    hover_no_sig=hover_pos_no_sig, trace_name=sample)
 
             self.fold_change_layout(fig,
                                     title="Pairwise Fold Change {} <i>vs</i> {}"
@@ -1043,37 +992,27 @@ class TestingBinReadVisualizer:
             self.saving_plot(fig, description="pw_fc_{}_{}_{}".format(chr_name, sample_pw, str(self.bin_size)))
 
             if cigar:
-                sample_clip = sample + "_cig_filt-" + control_name
                 fig2 = go.Figure()
+                sample_clip = sample + "_cig_filt-" + control_name
 
                 fig2.update_xaxes(title_text="Chromosome_Position")
                 fig2.update_yaxes(title_text="Clipped_log2_Fold-Change")
 
-                fc_chr = self.clip_fold_change[self.clip_fold_change["chr"].str.contains(chr_name) == True]
+                clip_fc_chr = self.clip_fold_change[self.clip_fold_change["chr"].str.contains(chr_name) == True]
 
-                sig_bins_pos = fc_chr[fc_chr[sample_clip] > fc]
-                sig_bins_neg = fc_chr[fc_chr[sample_clip] < -fc]
+                sig_bins_pos = clip_fc_chr[clip_fc_chr[sample_clip] > fc]
+                sig_bins_neg = clip_fc_chr[clip_fc_chr[sample_clip] < -fc]
                 sig_bins = pd.concat([sig_bins_pos, sig_bins_neg])
-                not_sig_bins = fc_chr.drop(list(sig_bins_pos.index) + list(sig_bins_neg.index))
+                not_sig_bins = clip_fc_chr.drop(list(sig_bins_pos.index) + list(sig_bins_neg.index))
 
                 hover_pos_sig = sig_bins["bin"] * self.bin_size
                 hover_pos_no_sig = not_sig_bins["bin"] * self.bin_size
+                marker_color = dict(size=5, color="rgb(176, 196, 222)")
 
-                fig2.add_trace(go.Scatter(x=hover_pos_sig,  # list(sig_data.index * self.bin_size),
-                                          y=sig_bins[sample_clip],
-                                          mode="markers",
-                                          hovertext=hover_pos_sig,
-                                          hovertemplate=
-                                          "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                          name=sample + "_cig_filt"))
-                fig2.add_trace(go.Scatter(x=hover_pos_no_sig,  # list(not_sig_data.index * self.bin_size),
-                                          y=not_sig_bins[sample_clip],
-                                          mode="markers",
-                                          marker=dict(size=5, color="rgb(176, 196, 222)"),  # gray
-                                          hovertext=hover_pos_no_sig,
-                                          hovertemplate=
-                                          "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                          name=sample + "_cig_filt_<b>not_sig</b>"))
+                self.fold_change_traces(pairwise, fig2, x_sig=hover_pos_sig, y_sig=sig_bins[sample_clip],
+                                        x_no_sig=hover_pos_no_sig, y_no_sig=not_sig_bins[sample_clip],
+                                        marker_dict=marker_color, hover_sig=hover_pos_sig, hover_no_sig=hover_pos_no_sig,
+                                        trace_name=sample + "_cig_filt")
 
                 self.fold_change_layout(fig2,
                                         title="{} <i>vs</i> {} - Chr: {} "
@@ -1117,25 +1056,14 @@ class TestingBinReadVisualizer:
                 sig_bins = pd.concat([sig_bins_pos, sig_bins_neg])
                 not_sig_bins = fc_chr.drop(list(sig_bins_pos.index) + list(sig_bins_neg.index))
 
-                hover_pos_sig = sig_bins["bin"] * self.bin_size
+                hover_pos_sig = sig_bins["bin"] * self.bin_size  # no need for the list because is only one chr
                 hover_pos_no_sig = not_sig_bins["bin"] * self.bin_size
+                marker_color = dict(size=5, color="rgb(176, 196, 222)")
 
-                fig.add_trace(go.Scatter(x=hover_pos_sig,  # list(sig_data.index * self.bin_size),
-                                         y=sig_bins[col],
-                                         mode="markers",
-                                         hovertext=hover_pos_sig,
-                                         hovertemplate=
-                                         "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                         name=col[:col.find("-")]))
-                fig.add_trace(go.Scatter(x=hover_pos_no_sig,  # list(not_sig_data.index * self.bin_size),
-                                         y=not_sig_bins[col],
-                                         mode="markers",
-                                         marker=dict(size=5, color="rgb(176, 196, 222)"),
-                                         hovertext=hover_pos_no_sig,
-                                         hovertemplate=
-                                         "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                         legendgroup="group",
-                                         name=col[:col.find("-")] + "_<b>not_sig</b>"))
+                self.fold_change_traces(pairwise, fig, x_sig=hover_pos_sig, y_sig=sig_bins[col],
+                                        x_no_sig=hover_pos_no_sig, y_no_sig=not_sig_bins[col], marker_dict=marker_color,
+                                        hover_sig=hover_pos_sig, hover_no_sig=hover_pos_no_sig,
+                                        trace_name=col[:col.find("-")])
 
         if cigar:
             for col in clip_fc_chr:
@@ -1147,23 +1075,13 @@ class TestingBinReadVisualizer:
 
                     hover_pos_sig = sig_bins["bin"] * self.bin_size
                     hover_pos_no_sig = not_sig_bins["bin"] * self.bin_size
+                    marker_color = dict(size=5, color="rgb(176, 196, 222)")
 
-                    fig2.add_trace(go.Scatter(x=hover_pos_sig,  # list(sig_data.index * self.bin_size),
-                                              y=sig_bins[col],
-                                              mode="markers",
-                                              hovertext=hover_pos_sig,
-                                              hovertemplate=
-                                              "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                              name=col[:col.find("-")]))
-                    fig2.add_trace(go.Scatter(x=hover_pos_no_sig,  # list(not_sig_data.index * self.bin_size),
-                                              y=not_sig_bins[col],
-                                              mode="markers",
-                                              marker=dict(size=5, color="rgb(176, 196, 222)"),
-                                              hovertext=hover_pos_no_sig,
-                                              hovertemplate=
-                                              "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                              legendgroup="group",
-                                              name=col[:col.find("-")] + "_<b>not_sig</b>"))
+                    self.fold_change_traces(pairwise, fig2, x_sig=hover_pos_sig, y_sig=sig_bins[col],
+                                            x_no_sig=hover_pos_no_sig, y_no_sig=not_sig_bins[col],
+                                            marker_dict=marker_color,
+                                            hover_sig=hover_pos_sig, hover_no_sig=hover_pos_no_sig,
+                                            trace_name=col[:col.find("-")])
 
         self.add_threshold_fc(fig, fc, len_x_axis=len(fc_chr))
         self.add_threshold_fc(fig2, fc, len_x_axis=len(clip_fc_chr))
@@ -1234,23 +1152,14 @@ class TestingBinReadVisualizer:
 
             hover_pos_sig = sig_bins["bin"] * self.bin_size
             hover_pos_no_sig = not_sig_bins["bin"] * self.bin_size
+            x_axis_sig = list(sig_bins.index * self.bin_size)
+            x_axis_no_sig = list(not_sig_bins.index * self.bin_size)
+            marker_color = dict(size=5, color="rgb(176, 196, 222)")
 
-            fig.add_trace(go.Scatter(x=list(sig_bins.index * self.bin_size),
-                                     y=sig_bins[col],
-                                     mode="markers",
-                                     hovertext=hover_pos_sig,
-                                     hovertemplate=
-                                     "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                     name=sample))
-            fig.add_trace(go.Scatter(x=list(not_sig_bins.index * self.bin_size),
-                                     y=not_sig_bins[col],
-                                     mode="markers",
-                                     marker=dict(size=5, color="rgb(176, 196, 222)"),
-                                     hovertext=hover_pos_no_sig,
-                                     hovertemplate=
-                                     "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                     legendgroup="group",
-                                     name=sample + "_not_sig"))
+            self.fold_change_traces(pairwise, fig, x_sig=x_axis_sig, y_sig=sig_bins[col],
+                                    x_no_sig=x_axis_no_sig, y_no_sig=not_sig_bins[col], marker_dict=marker_color,
+                                    hover_sig=hover_pos_sig, hover_no_sig=hover_pos_no_sig,
+                                    trace_name=sample)
 
             self.fold_change_layout(fig, title="Pairwise Fold Change - All Chromosomes - Bin Size: {} "
                                                "- Threshold_fc: {} <br> {} <i>vs</i> {}".format(str(self.bin_size),
@@ -1273,30 +1182,24 @@ class TestingBinReadVisualizer:
                 fig2.update_xaxes(title_text="Chromosome_Position")
                 fig2.update_yaxes(title_text="Clipped_log2_Fold-Change")
 
-                sig_bins_pos = self.clip_fold_change[["chr", "bin", sample_clip]][self.clip_fold_change[sample_clip] > fc]
-                sig_bins_neg = self.clip_fold_change[["chr", "bin", sample_clip]][self.clip_fold_change[sample_clip] < -fc]
+                sig_bins_pos = self.clip_fold_change[["chr", "bin", sample_clip]][
+                    self.clip_fold_change[sample_clip] > fc]
+                sig_bins_neg = self.clip_fold_change[["chr", "bin", sample_clip]][
+                    self.clip_fold_change[sample_clip] < -fc]
                 sig_bins = pd.concat([sig_bins_pos, sig_bins_neg])
                 not_sig_bins = self.clip_fold_change[["chr", "bin", sample_clip]].drop(list(sig_bins_pos.index) +
-                                                                          list(sig_bins_neg.index))
+                                                                                       list(sig_bins_neg.index))
 
                 hover_pos_sig = sig_bins["bin"] * self.bin_size
                 hover_pos_no_sig = not_sig_bins["bin"] * self.bin_size
+                x_axis_sig = list(sig_bins.index * self.bin_size)
+                x_axis_no_sig = list(not_sig_bins.index * self.bin_size)
+                marker_color = dict(size=5, color="rgb(176, 196, 222)")
 
-                fig2.add_trace(go.Scatter(x=list(sig_bins.index * self.bin_size),  # list(sig_data.index * self.bin_size),
-                                          y=sig_bins[sample_clip],
-                                          mode="markers",
-                                          hovertext=hover_pos_sig,
-                                          hovertemplate=
-                                          "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                          name=sample + "_cig_filt"))
-                fig2.add_trace(go.Scatter(x=list(not_sig_bins.index * self.bin_size),  # list(not_sig_data.index * self.bin_size),
-                                          y=not_sig_bins[sample_clip],
-                                          mode="markers",
-                                          marker=dict(size=5, color="rgb(176, 196, 222)"),  # gray
-                                          hovertext=hover_pos_no_sig,
-                                          hovertemplate=
-                                          "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                          name=sample + "_cig_filt_<b>not_sig</b>"))
+                self.fold_change_traces(pairwise, fig2, x_sig=x_axis_sig, y_sig=sig_bins[sample_clip],
+                                        x_no_sig=x_axis_no_sig, y_no_sig=not_sig_bins[sample_clip],
+                                        marker_dict=marker_color, hover_sig=hover_pos_sig, hover_no_sig=hover_pos_no_sig,
+                                        trace_name=sample + "_cig_filt")
 
                 self.fold_change_layout(fig2,
                                         title="{} <i>vs</i> {}"
