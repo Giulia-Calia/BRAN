@@ -505,224 +505,6 @@ class TestingBinReadAnalyzer:
         else:
             print("Sorry, to add this trace to the plot, you have to specify the reference file name\nPlease try again")
 
-    def plot_fold_change_chr_sample(self, pairwise, fc, chrom, sample, control_name, saving_folder):
-        """"""
-        if pairwise:
-            fig = go.Figure()
-
-            fig.update_xaxes(title_text="Chromosome_Position")
-            fig.update_yaxes(title_text="Fold-Change")
-
-            c_name = None
-            for c in self.fold_change["chr"].value_counts().index:
-                if c.endswith(str(chrom)):
-                    c_name = c
-
-            single_chrom = self.fold_change[self.fold_change["chr"] == c_name]
-            for col in single_chrom:
-                if col == sample + "-" + control_name:
-                    sig_data_pos = single_chrom[["chr", "bin", col]][single_chrom[col] > fc]
-                    sig_data_neg = single_chrom[["chr", "bin", col]][single_chrom[col] < -fc]
-                    sig_data = pd.concat([sig_data_pos, sig_data_neg])
-                    not_sig_data = single_chrom[["chr", "bin", col]].drop(
-                        list(sig_data_pos.index) + list(sig_data_neg.index))
-
-                    hover_pos_sig = sig_data["bin"] * self.bin_size
-                    hover_pos_no_sig = not_sig_data["bin"] * self.bin_size
-
-                    fig.add_trace(go.Scatter(x=hover_pos_sig,  # list(sig_data.index * self.bin_size),
-                                             y=sig_data[col],
-                                             mode="markers",
-                                             hovertext=hover_pos_sig,
-                                             hovertemplate=
-                                             "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                             name=col))
-                    fig.add_trace(go.Scatter(x=hover_pos_no_sig,  # list(not_sig_data.index * self.bin_size),
-                                             y=not_sig_data[col],
-                                             mode="markers",
-                                             marker=dict(size=5, color="rgb(176, 196, 222)"),
-                                             hovertext=hover_pos_no_sig,
-                                             hovertemplate=
-                                             "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                             legendgroup="group",
-                                             name=col))
-
-                    fig.update_layout(title="Pairwise Fold Change - Chromosome: " + c_name +
-                                            " - Clone: " + str(sample) + " vs " + str(control_name) +
-                                            " - Bin Size: " + str(self.bin_size) +
-                                            " - Threshold_FC: " + str(fc),
-                                      legend_orientation="h")
-
-                    # save_fig = fig.write_image(saving_folder +
-                    #                            "pairwise_fold_change_" +
-                    #                            c_name + "_" +
-                    #                            sample + "_" +
-                    #                            str(self.bin_size) +
-                    #                            ".jpeg",
-                    #                            width=1280,
-                    #                            height=1024)
-
-            # fig.show()
-
-        else:
-            print("""ATTENTION: if parameter '-pw' not give, its impossible to retrieve graphical information 
-                  on single sample fold-change. \nPlease TRY AGAIN specifying '-pw' or '--pairwise' in command line""")
-
-    def plot_fold_change_chr(self, pairwise, fc, chrom, saving_folder):
-        """"""
-        fig = go.Figure()
-
-        fig.update_xaxes(title_text="Chromosome_Position")
-        fig.update_yaxes(title_text="Fold-Change")
-
-        c_name = None
-        for c in self.fold_change["chr"].value_counts().index:
-            if c.endswith(str(chrom)):
-                c_name = c
-        single_chrom = self.fold_change[self.fold_change["chr"] == c_name]
-        if pairwise:
-            for col in single_chrom:
-                if col != "chr" and col != "bin":
-                    sig_data_pos = single_chrom[["chr", "bin", col]][single_chrom[col] > fc]
-                    sig_data_neg = single_chrom[["chr", "bin", col]][single_chrom[col] < -fc]
-                    sig_data = pd.concat([sig_data_pos, sig_data_neg])
-                    not_sig_data = single_chrom[["chr", "bin", col]].drop(
-                        list(sig_data_pos.index) + list(sig_data_neg.index))
-
-                    hover_pos_sig = sig_data["bin"] * self.bin_size
-                    hover_pos_no_sig = not_sig_data["bin"] * self.bin_size
-
-                    fig.add_trace(go.Scatter(x=hover_pos_sig,  # list(sig_data.index * self.bin_size),
-                                             y=sig_data[col],
-                                             mode="markers",
-                                             hovertext=hover_pos_sig,
-                                             hovertemplate=
-                                             "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                             name=col))
-                    fig.add_trace(go.Scatter(x=hover_pos_no_sig,  # list(not_sig_data.index * self.bin_size),
-                                             y=not_sig_data[col],
-                                             mode="markers",
-                                             marker=dict(size=5, color="rgb(176, 196, 222)"),
-                                             hovertext=hover_pos_no_sig,
-                                             hovertemplate=
-                                             "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                             legendgroup="group",
-                                             name=col))
-
-                    fig.update_layout(title="Pairwise Fold Change - Chromosome: " + c_name +
-                                            " - Each clone vs reference - Bin Size: " + str(self.bin_size) +
-                                            " - Threshold_FC: " + str(fc),
-                                      legend_orientation="h")
-
-                    # save_fig = fig.write_image(saving_folder +
-                    #                            "pairwise_fold_change_" +
-                    #                            c_name + "_" +
-                    #                            str(self.bin_size) +
-                    #                            ".jpeg",
-                    #                            width=1280,
-                    #                            height=1024)
-
-            # fig.show()
-
-        else:
-            for col in list(single_chrom.columns):
-                if col != "bin" and col != "chr":
-                    sig_data_pos = single_chrom[single_chrom[col] > fc]
-                    sig_data_neg = single_chrom[single_chrom[col] < -fc]
-                    sig_data = pd.concat([sig_data_pos, sig_data_neg])
-                    not_sig_data = single_chrom.drop(list(sig_data_pos.index) + list(sig_data_neg.index))
-                    hover_pos_sig = sig_data["bin"] * self.bin_size
-                    hover_pos_no_sig = not_sig_data["bin"] * self.bin_size
-
-                    fig.add_trace(go.Scatter(x=hover_pos_sig,  # list(sig_data.index * self.bin_size),
-                                             y=sig_data[col],
-                                             mode="markers",
-                                             hovertext=hover_pos_sig,
-                                             hovertemplate=
-                                             "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                             name="Significant Differences"))
-                    fig.add_trace(go.Scatter(x=hover_pos_no_sig,  # list(not_sig_data.index * self.bin_size),
-                                             y=not_sig_data[col],
-                                             mode="markers",
-                                             marker=dict(size=5, color="rgb(176, 196, 222)"),
-                                             hovertext=hover_pos_no_sig,
-                                             hovertemplate=
-                                             "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                             legendgroup="group",
-                                             name="Not Significant Differences"))
-
-                    fig.update_layout(title="Fold Change - Chromosome: " + c_name + "Clone: all vs Reference - "
-                                                                                    "Bin Size: " + str(
-                        self.bin_size) + " - Threshold_FC: " + str(fc),
-                                      legend_orientation="h")
-
-                # save_fig = fig.write_image(saving_folder +
-                #                            "fold_change_" +
-                #                            c_name + "_" +
-                #                            str(self.bin_size) +
-                #                            ".jpeg",
-                #                            width=1280,
-                #                            height=1024)
-
-            # fig.show()
-
-    def plot_fold_change_sample(self, pairwise, fc, sample, control_name, saving_folder):
-        """"""
-        if pairwise:
-            fig = go.Figure()
-
-            fig.update_xaxes(title_text="Genome_Position")
-            fig.update_yaxes(title_text="Fold_change")
-
-            for col in self.fold_change:
-                if col == sample + "-" + control_name:
-                    sig_data_pos = self.fold_change[["chr", "bin", col]][self.fold_change[col] > fc]
-                    sig_data_neg = self.fold_change[["chr", "bin", col]][self.fold_change[col] < -fc]
-                    sig_data = pd.concat([sig_data_pos, sig_data_neg])
-                    not_sig_data = self.fold_change[["chr", "bin", col]].drop(list(sig_data_pos.index) +
-                                                                              list(sig_data_neg.index))
-
-                    hover_pos_sig = sig_data["bin"] * self.bin_size
-                    hover_pos_no_sig = not_sig_data["bin"] * self.bin_size
-
-                    fig.add_trace(go.Scatter(x=list(sig_data.index * self.bin_size),
-                                             y=sig_data[col],
-                                             mode="markers",
-                                             hovertext=hover_pos_sig,
-                                             hovertemplate=
-                                             "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                             name=col))
-                    fig.add_trace(go.Scatter(x=list(not_sig_data.index * self.bin_size),
-                                             y=not_sig_data[col],
-                                             mode="markers",
-                                             marker=dict(size=5, color="rgb(176, 196, 222)"),
-                                             hovertext=hover_pos_no_sig,
-                                             hovertemplate=
-                                             "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                             legendgroup="group",
-                                             name=col))
-
-                    fig.update_layout(title="Pairwise Fold Change - All chromosomes - Clone: " +
-                                            str(sample) + " vs " + str(control_name) +
-                                            " - Bin Size: " + str(self.bin_size) +
-                                            " - Threshold_FC: " + str(fc),
-                                      legend_orientation="h")
-
-                    # save_fig = fig.write_image(saving_folder +
-                    #                            "pairwise_fold_change_sample_"
-                    #                            + str(self.bin_size) +
-                    #                            ".jpeg",
-                    #                            width=1280,
-                    #                            height=1024)
-
-            self.add_threshold_fc(fig, fc)
-            # self.plot_background(fig)
-            # fig.show()
-
-        else:
-            print("""ATTENTION: if parameter '-pw' not give, its impossible to retrieve graphical information 
-                  on single sample fold-change. \nPlease TRY AGAIN specifying '-pw' or '--pairwise' in command line""")
-
     def output_sig_positions(self, fc, control_name, file_output_path):
 
         sig_df = pd.concat([self.sig_bins, self.sig_clip_bins])
@@ -743,57 +525,48 @@ class TestingBinReadAnalyzer:
                                               self.norm_clip, self.log_norm_clip, self.parameters["unmapped_reads"],
                                               self.norm_unmapped, self.fold_change, self.clipped_fold_change,
                                               saving_folder, saving_format, plot_template)
-        # fig = go.Figure()
-        # visualizer.plot_background(fig)
-        # visualizer.add_threshold_fc(fig, fc)
-        # visualizer.plot_scatter(ref_genome)
-        # print("\nok3")
-        # visualizer.plot_fold_change(fc, pairwise, control_name)
-        # print("\nok5")
-        # visualizer.plot_clip_fold_change(fc, pairwise, control_name)
-        # print("\nok6")
-        visualizer.plot_fold_change_chr_sample(pairwise, fc, chr_name, sample, control_name, cigar)
-        print("\nok15")
-        # visualizer.plot_fold_change_chr(pairwise, fc, chr_name, control_name, cigar)
-        # print("\nok16")
-        # visualizer.plot_fold_change_sample(pairwise, fc, sample, control_name, cigar)
-        # print("\nok17")
-        exit(1)
 
-        visualizer.plot_violin()
-        print("\nok1")
-        visualizer.plot_bar(cigar, unmapped)
-        print("\nok2")
-        visualizer.plot_scatter(ref_genome)
-        print("\nok3")
-        visualizer.plot_norm_scatter(ref_genome)
-        print("\nok4")
-        visualizer.plot_fold_change(fc, pairwise, control_name)
-        print("\nok5")
-        visualizer.plot_clip_fold_change(fc, pairwise, control_name)
-        print("\nok6")
-        visualizer.plot_clipped_scatter(ref_genome)
-        print("\nok7")
-        visualizer.plot_norm_clipped_scatter(ref_genome)
-        print("\nok8")
-        visualizer.plot_chr_sample(chr_name, sample, cigar)
-        print("\nok9")
-        visualizer.plot_norm_chr_sample(chr_name, sample, cigar)
-        print("\nok10")
-        visualizer.plot_chr(chr_name, cigar)
-        print("\nok11")
-        visualizer.plot_norm_chr(chr_name, cigar)
-        print("\nok12")
-        visualizer.plot_sample(sample, cigar)
-        print("\nok13")
-        visualizer.plot_norm_sample(sample, cigar)
-        print("\nok14")
-        visualizer.plot_fold_change_chr_sample(pairwise, fc, chr_name, sample, control_name, cigar)
-        print("\nok15")
-        visualizer.plot_fold_change_chr(pairwise, fc, chr_name, control_name, cigar)
-        print("\nok16")
-        visualizer.plot_fold_change_sample(pairwise, fc, sample, control_name, cigar)
-        print("\nok17")
+        if chr_name and sample:
+            visualizer.plot_chr_sample(chr_name, sample, cigar)
+            # print("\nok9")
+            visualizer.plot_norm_chr_sample(chr_name, sample, cigar)
+            # print("\nok10")
+            visualizer.plot_fold_change_chr_sample(pairwise, fc, chr_name, sample, control_name, cigar)
+            # print("\nok15")
+
+        elif chr_name and not sample:
+            visualizer.plot_chr(chr_name, cigar)
+            # print("\nok11")
+            visualizer.plot_norm_chr(chr_name, cigar)
+            # print("\nok12")
+            visualizer.plot_fold_change_chr(pairwise, fc, chr_name, control_name, cigar)
+            # print("\nok16")
+
+        elif sample and not chr_name:
+            visualizer.plot_sample(sample, cigar)
+            # print("\nok13")
+            visualizer.plot_norm_sample(sample, cigar)
+            # print("\nok14")
+            visualizer.plot_fold_change_sample(pairwise, fc, sample, control_name, cigar)
+            # print("\nok17")
+
+        else:
+            visualizer.plot_violin()
+            # print("\nok1")
+            visualizer.plot_bar(cigar, unmapped)
+            # print("\nok2")
+            visualizer.plot_scatter()
+            # print("\nok3")
+            visualizer.plot_norm_scatter()
+            # print("\nok4")
+            visualizer.plot_clipped_scatter()
+            # print("\nok5")
+            visualizer.plot_norm_clipped_scatter()
+            # print("\nok6")
+            visualizer.plot_fold_change(fc, pairwise, control_name)
+            # print("\nok7")
+            visualizer.plot_clip_fold_change(fc, pairwise, control_name)
+            # print("\nok8")
 
 
 if __name__ == "__main__":
@@ -920,9 +693,9 @@ if __name__ == "__main__":
     # template = "seaborn+none"
     template = pio.templates["seaborn"]
     colors = px.colors.qualitative.T10
-    colors[1] = "rgb(0, 122, 102)"  # petrol green
+    colors[1] = "rgb(135,197,35)"  # light green
     colors[2] = "rgb(184, 0, 58)"  # dark magenta
-    colors[3] = "#F58518"  # yellow/orange
+    colors[3] = "rgb(255,165,0)"  # yellow/orange
     template.layout["colorway"] = colors
     template.layout["font"]["color"] = "#2a3f5f"  # to verify: "#DC143C"
 
@@ -936,6 +709,8 @@ if __name__ == "__main__":
 
     if args.folder != dict_args["folder"]:
         args.folder = dict_args["folder"] + args.folder
+    else:
+        pass
 
     analyzer = TestingBinReadAnalyzer(args.folder,
                                       args.bin_size,
@@ -953,92 +728,39 @@ if __name__ == "__main__":
 
     if not os.path.exists(args.saving_folder + "plots"):
         os.mkdir(args.saving_folder + "plots")
+    else:
+        pass
 
     analyzer.no_repeats_df_transformation()
     analyzer.normalize_bins(args.control_name)
     analyzer.calc_fold_change(args.control_name, args.pairwise)
     analyzer.summary_sig_bins(args.fold_change)
-    #
-    # if args.identifier:
-    #     if not os.path.exists(args.saving_folder + "ids"):
-    #         os.mkdir(args.saving_folder + "ids")
-    #     bin_dictionary = dict(zip(args.bin_chromosomes, args.bin_positions))
-    #     ide = TestingBinReadIdentifier(args.bin_size,
-    #                                    args.flag_list,
-    #                                    args.folder,
-    #                                    args.saving_folder + "ids",
-    #                                    bin_dictionary,
-    #                                    args.cigar,
-    #                                    args.cigar_filter)
-    #     ide.load_bam()
-    #     ide.mapped_ids()
 
+    if args.identifier:
+        if not os.path.exists(args.saving_folder + "ids"):
+            os.mkdir(args.saving_folder + "ids")
+        else:
+            pass
 
-    if args.general_info and args.cigar:
-        print("\nok")
-        analyzer.summary_sig_bins(args.fold_change)
-        analyzer.output_sig_positions(args.fold_change, args.control_name, args.output_pickle)
-        analyzer.plot(template, args.saving_folder, args.saving_format, args.cigar,
-                      args.unmapped, args.reference, args.fold_change, args.pairwise, args.control_name,
-                      chr_name=args.chromosome, sample=args.sample)
+        bin_dictionary = dict(zip(args.bin_chromosomes, args.bin_positions))
+        ide = TestingBinReadIdentifier(args.bin_size,
+                                       args.flag_list,
+                                       args.folder,
+                                       args.saving_folder + "ids",
+                                       bin_dictionary,
+                                       args.cigar,
+                                       args.cigar_filter)
+        ide.load_bam()
+        ide.mapped_ids()
 
-    exit(1)
+    else:
+        pass
 
-        # analyzer.plot_violin_dist_counts(args.saving_folder)
-        # analyzer.plot_bar_chart(args.saving_folder, args.cigar, args.unmapped)
-        # analyzer.plot_all(args.saving_folder, args.reference, template, args.Ns_count)
-        # analyzer.plot_norm_data_all(args.saving_folder, args.reference, template)
-        # analyzer.plot_filtered_reads(args.saving_folder)
-        # analyzer.plot_fold_change(args.fold_change, args.saving_folder, args.pairwise, args.control_name)
-        # analyzer.plot_filt_reads_fold_change(args.fold_change, args.pairwise, args.control_name, args.saving_folder)
-        # analyzer.sig_positions_output_file(args.fold_change, args.control_name, args.output_pickle)
-
-    # elif args.general_info:
-    #     analyzer.plot_counts_distributions(args.saving_folder)
-    #     analyzer.plot_bar_chart(args.saving_folder, args.cigar, args.unmapped)
-    #     analyzer.plot_all(args.saving_folder, args.reference, template, args.Ns_count)
-    #     analyzer.plot_norm_data_all(args.saving_folder, args.reference, template)
-    #     analyzer.plot_fold_change(args.fold_change, args.saving_folder, args.pairwise)
-    #
-    # else:
-    #     if args.chromosome and args.sample:
-    #         analyzer.plot_chrom_sample(args.saving_folder, args.reference, args.chromosome,
-    #                                    args.sample, template, args.Ns_count)
-    #         analyzer.plot_norm_data_chr_sample(args.saving_folder, args.reference, args.chromosome,
-    #                                            args.sample, template, args.Ns_count)
-    #         analyzer.plot_fold_change_chr_sample(args.pairwise, args.fold_change, args.chromosome,
-    #                                              args.sample, args.control_name, args.saving_folder)
-    #
-    #     elif args.chromosome:
-    #         analyzer.plot_chromosome(args.saving_folder, args.reference, args.chromosome, template, args.Ns_count)
-    #         analyzer.plot_norm_data_chr(args.saving_folder, args.reference, args.chromosome, template, args.Ns_count)
-    #         analyzer.plot_fold_change_chr(args.pairwise, args.fold_change, args.chromosome, args.saving_folder)
-    #
-    #     else:
-    #         analyzer.plot_sample(args.saving_folder, args.reference, args.sample, template, args.Ns_count)
-    #         analyzer.plot_norm_data_sample(args.saving_folder, args.reference, args.sample, template, args.Ns_count)
-    #         analyzer.plot_fold_change_sample(args.pairwise, args.fold_change, args.sample,
-    #                                          args.control_name, args.saving_folder)
-
-    # ----------------------------testing_each_plot---------------------------------------------------------------------
-    # analyzer.plot_counts_distributions(args.saving_folder, args.cigar_filter)
-    # analyzer.plot_all(args.saving_folder, args.reference, args.cigar)
-    # analyzer.plot_norm_data_all(args.saving_folder, args.reference)
-    # analyzer.plot_chrom_sample(args.saving_folder, args.reference, args.chromosome, args.sample, args.cigar,
-    #                            args.Ns_count)
-    # analyzer.plot_chromosome(args.saving_folder, args.reference, args.chromosome, args.cigar, args.Ns_count)
-    # analyzer.plot_sample(args.saving_folder, args.reference, args.sample, args.cigar, args.Ns_count)
-    # analyzer.plot_norm_data_chr_sample(args.saving_folder, args.reference, args.chromosome,
-    # args.sample, args.Ns_count)
-    # analyzer.plot_norm_data_chr(args.saving_folder, args.reference, args.chromosome, args.Ns_count)
-    # analyzer.plot_norm_data_sample(args.saving_folder, args.reference, args.sample, args.Ns_count)
-    # analyzer.plot_fold_change(args.fold_change, args.saving_folder, args.pairwise)
-    # analyzer.plot_fold_change_chr_sample(args.pairwise, args.fold_change, args.chromosome,
-    # args.sample, args.control_name, args.saving_folder)
-    # analyzer.plot_fold_change_chr(args.pairwise, args.fold_change, args.chromosome, args.saving_folder)
-    # analyzer.plot_fold_change_sample(args.pairwise, args.fold_change, args.sample,
-    # args.control_name, args.saving_folder)
-    # exit(1)
+    analyzer.summary_sig_bins(args.fold_change)
+    analyzer.output_sig_positions(args.fold_change, args.control_name, args.output_pickle)
+    analyzer.plot(template, args.saving_folder, args.saving_format, args.cigar,
+                  args.unmapped, args.reference, args.fold_change, args.pairwise, args.control_name,
+                  chr_name=args.chromosome, sample=args.sample)
 
     # ---------------------------complete_file_pickle-------------------------------------------------------------------
     # with open("../all_samples_pickles/BRAN250000_df.p", "rb") as input_param:

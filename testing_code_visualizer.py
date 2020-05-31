@@ -144,6 +144,7 @@ class TestingBinReadVisualizer:
 
         fig = make_subplots(rows=1, cols=2, subplot_titles=("Normalized Counts",
                                                             "Soft_Hard Clipped Read Counts"))
+        self.color_palette[1] = "rgb(0, 122, 102)"
         i = 0
         j = 0
         hover_pos = self.norm_counts["bin"] * self.bin_size
@@ -275,7 +276,7 @@ class TestingBinReadVisualizer:
         of all chromosomes and all samples
 
         Args:
-            reference (bool): true if the reference is declared
+            ref_genome (bool): true if the reference is declared
             ns (bool): by default sets to False, but is one want to include
                        the Ns count trace, it has to set to True
             fig (obj): is a go.Figure() object for the building of the plot
@@ -314,7 +315,7 @@ class TestingBinReadVisualizer:
 
         self.saving_plot(fig, description="scatter_all_counts_" + str(self.bin_size))
 
-    def plot_norm_scatter(self, ref_genome, ns=False, fig=go.Figure()):
+    def plot_norm_scatter(self, ref_genome=False, ns=False, fig=go.Figure()):
         """This method allows to obtain a scatter-plot of normalized_read_counts
         in all chromosomes and for all samples
 
@@ -355,7 +356,7 @@ class TestingBinReadVisualizer:
 
         self.saving_plot(fig, description="scatter_norm_all_counts_" + str(self.bin_size))
 
-    def plot_clipped_scatter(self, ref_genome, ns=False, fig=go.Figure()):
+    def plot_clipped_scatter(self, ref_genome=False, ns=False, fig=go.Figure()):
         fig.update_xaxes(title_text="Genome_Position")
         fig.update_yaxes(title_text="Raw_Clipped_Read_counts")
 
@@ -380,7 +381,7 @@ class TestingBinReadVisualizer:
 
         self.saving_plot(fig, description="scatter_clip_counts" + str(self.bin_size))
 
-    def plot_norm_clipped_scatter(self, ref_genome, ns=False, fig=go.Figure()):
+    def plot_norm_clipped_scatter(self, ref_genome=False, ns=False, fig=go.Figure()):
         fig.update_xaxes(title_text="Genome_Position")
         fig.update_yaxes(title_text="Norm_Clipped_Read_counts")
 
@@ -806,8 +807,12 @@ class TestingBinReadVisualizer:
 
     def fold_change_colors(self):
         colors = px.colors.qualitative.T10
+        colors[1] = "rgb(76,120,168)"  # dark blue
         colors[2] = "rgb(135,197,35)"  # light green
+        colors[3] = "rgb(135,197,35)"
         colors[4] = "rgb(184, 0, 58)"  # dark magenta
+        colors[5] = "rgb(184, 0, 58)"
+
         self.template.layout["colorway"] = colors
         return self.template
 
@@ -825,7 +830,8 @@ class TestingBinReadVisualizer:
             fig.add_trace(go.Scatter(x=x_no_sig,
                                      y=y_no_sig,
                                      mode="markers",
-                                     marker=marker_dict,
+                                     opacity=0.2,
+                                     # marker=marker_dict,
                                      hovertext=hover_no_sig,
                                      hovertemplate="<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
                                      name=trace_name + "_<b>not_significant</b>"))
@@ -841,7 +847,8 @@ class TestingBinReadVisualizer:
             fig.add_trace(go.Scatter(x=x_no_sig,
                                      y=y_no_sig,
                                      mode="markers",
-                                     marker=marker_dict,
+                                     opacity=0.2,
+                                     # marker=marker_dict,
                                      hovertext=hover_no_sig,
                                      hovertemplate="<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
                                      name="Not Significant Differences"))
@@ -1033,7 +1040,7 @@ class TestingBinReadVisualizer:
                                                                                    sample_clip,
                                                                                    str(self.bin_size)))
         else:
-            print("""ATTENTION: if parameter '-pw' not given, its impossible to retrieve graphical information 
+            print("""ATTENTION: if parameter '-pw' not given, it's impossible to retrieve graphical information 
                   on single sample fold-change. \nPlease TRY AGAIN specifying '-pw' or '--pairwise' in command line""")
 
     def plot_fold_change_chr(self, pairwise, fc, chr_name, control_name, cigar):
@@ -1218,5 +1225,5 @@ class TestingBinReadVisualizer:
                                                                                 str(self.bin_size)))
 
         else:
-            print("""ATTENTION: if parameter '-pw' not given, its impossible to retrieve graphical information 
+            print("""ATTENTION: if parameter '-pw' not given, it's impossible to retrieve graphical information 
                   on single sample fold-change. \nPlease TRY AGAIN specifying '-pw' or '--pairwise' in command line""")
