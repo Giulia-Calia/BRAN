@@ -258,7 +258,7 @@ class TestingBinReadAnalyzer:
         alphanum_key = lambda key: [convert(c) for c in re.split('([0-9]+)', key)]
         return sorted(column, key=alphanum_key)
 
-    def no_repeats_df_transformation(self):
+    def no_repeats_df_transformation(self, saving_folder):
         read_counts = self.parameters["read_counts"]
         # print(read_counts)
         chr_list = list(read_counts["chr"].value_counts().index)
@@ -271,7 +271,7 @@ class TestingBinReadAnalyzer:
         sorted_df = sorted_df.reset_index(drop=True)
         self.set_read_counts(sorted_df)
         # print("sorted_read_counts: \n", self.parameters["read_counts"])
-        sorted_df.to_csv("sorted_df.txt", sep="\t")
+        sorted_df.to_csv(saving_folder + "sorted_df.txt", sep="\t")
         return self.parameters["read_counts"]
 
     def normalize_bins(self, control_name):
@@ -296,10 +296,14 @@ class TestingBinReadAnalyzer:
 
         for col in read_counts:
             if col != "chr" and col != 'bin' and "cig_filt" not in col:
+                # print(list(read_counts[col]))
                 # creates an element of the dictionary [sample_name]: r_vector_of_counts
                 read_counts_edger[col] = robjects.IntVector(read_counts[col])
 
+                # print(read_counts_edger[col])
+
             elif "cig_filt" in col:
+                # print(list(read_counts[col]))
                 clipped_count[col] = read_counts[col]
             update_bar += 1
             norm_bar.update(update_bar)
@@ -519,12 +523,12 @@ class TestingBinReadAnalyzer:
 
         print(sig_df)
 
-    def plot(self, plot_template, saving_folder, saving_format, cigar, unmapped, ref_genome, fc, pairwise, control_name,
+    def plot(self, plot_template, fc_template, saving_folder, saving_format, cigar, unmapped, ref_genome, fc, pairwise, control_name,
              chr_name=None, sample=None):
         visualizer = TestingBinReadVisualizer(self.bin_size, self.parameters["read_counts"], self.norm, self.log_norm,
                                               self.norm_clip, self.log_norm_clip, self.parameters["unmapped_reads"],
                                               self.norm_unmapped, self.fold_change, self.clipped_fold_change,
-                                              saving_folder, saving_format, plot_template)
+                                              saving_folder, saving_format, plot_template, fc_template)
 
         if chr_name and sample:
             visualizer.plot_chr_sample(chr_name, sample, cigar)
@@ -563,6 +567,7 @@ class TestingBinReadAnalyzer:
             # print("\nok5")
             visualizer.plot_norm_clipped_scatter()
             # print("\nok6")
+            # visualizer.fold_change_colors()
             visualizer.plot_fold_change(fc, pairwise, control_name)
             # print("\nok7")
             visualizer.plot_clip_fold_change(fc, pairwise, control_name)
@@ -692,12 +697,25 @@ if __name__ == "__main__":
     # pio.templates.default = "seaborn+none"
     # template = "seaborn+none"
     template = pio.templates["seaborn"]
-    colors = px.colors.qualitative.T10
-    colors[1] = "rgb(135,197,35)"  # light green
-    colors[2] = "rgb(184, 0, 58)"  # dark magenta
-    colors[3] = "rgb(255,165,0)"  # yellow/orange
-    template.layout["colorway"] = colors
+    # colors = px.colors.qualitative.T10
+    color_palette = ["rgb(183, 10, 48)", "rgb(255, 186, 8)", "rgb(63, 163, 197)", "rgb(3, 84, 99)", "rgb(110, 29, 93)",
+                     "rgb(235, 181, 155)", "rgb(188, 178, 215)", "rgb(196, 235, 112)", "rgb(196, 90, 140)",
+                     "rgb(32, 100, 186)", "rgb(255, 0, 75)", "rgb(109, 89, 122)", "rgb(165, 255, 186)",
+                     "rgb(196, 51, 122)", "rgb(255, 132, 11)", "rgb(121, 110, 192)"]
+    # colors[1] = "rgb(135,197,35)"  # light green
+    # colors[2] = "rgb(184, 0, 58)"  # dark magenta
+    # colors[3] = "rgb(255,165,0)"  # yellow/orange
+    # template.layout["colorway"] = colors
+    template.layout["colorway"] = color_palette
     template.layout["font"]["color"] = "#2a3f5f"  # to verify: "#DC143C"
+
+    fc_template = pio.templates["seaborn"]
+    fc_color = []
+    for color in color_palette:
+        fc_color += [color, color]
+
+    fc_template.layout["colorway"] = fc_color
+    template.layout["font"]["color"] = "#2a3f5f"
 
     args = parser.parse_args()
     dict_args = vars(parser.parse_args([]))
@@ -726,12 +744,15 @@ if __name__ == "__main__":
                        unmapped=args.unmapped,
                        verbose=True)
 
-    if not os.path.exists(args.saving_folder + "plots"):
-        os.mkdir(args.saving_folder + "plots")
+    plots_folder = args.saving_folder + "plots"
+    if not os.path.exists(plots_folder):
+        os.mkdir(plots_folder)
+
     else:
         pass
 
-    analyzer.no_repeats_df_transformation()
+    analyzer.no_repeats_df_transformation(args.saving_folder)
+
     analyzer.normalize_bins(args.control_name)
     analyzer.calc_fold_change(args.control_name, args.pairwise)
     analyzer.summary_sig_bins(args.fold_change)
@@ -756,9 +777,9 @@ if __name__ == "__main__":
     else:
         pass
 
-    analyzer.summary_sig_bins(args.fold_change)
     analyzer.output_sig_positions(args.fold_change, args.control_name, args.output_pickle)
-    analyzer.plot(template, args.saving_folder, args.saving_format, args.cigar,
+    # exit(1)
+    analyzer.plot(template, fc_template, plots_folder, args.saving_format, args.cigar,
                   args.unmapped, args.reference, args.fold_change, args.pairwise, args.control_name,
                   chr_name=args.chromosome, sample=args.sample)
 

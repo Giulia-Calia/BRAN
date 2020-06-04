@@ -10,12 +10,13 @@ import plotly.graph_objects as go
 import plotly.express as px
 import plotly.io as pio
 import pandas as pd
+import numpy as np
 from plotly.subplots import make_subplots
 
 
 class TestingBinReadVisualizer:
     def __init__(self, bin_size, counts, norm, log_norm, norm_clip, log_norm_clip, unmapped,
-                 norm_unmapped, fold_change, clip_fold_change, saving_folder, saving_format, template):
+                 norm_unmapped, fold_change, clip_fold_change, saving_folder, saving_format, template, fc_template):
         self.bin_size = bin_size
         self.read_counts = counts
         self.norm_counts = norm
@@ -29,7 +30,7 @@ class TestingBinReadVisualizer:
         self.saving_folder = saving_folder
         self.saving_format = saving_format
         self.template = template
-        self.color_palette = px.colors.qualitative.T10 + px.colors.qualitative.Pastel + px.colors.qualitative.Safe
+        self.fc_template = fc_template
 
     def sorted_chromosomes(self, column):
         convert = lambda text: int(text) if text.isdigit() else text
@@ -144,7 +145,6 @@ class TestingBinReadVisualizer:
 
         fig = make_subplots(rows=1, cols=2, subplot_titles=("Normalized Counts",
                                                             "Soft_Hard Clipped Read Counts"))
-        self.color_palette[1] = "rgb(0, 122, 102)"
         i = 0
         j = 0
         hover_pos = self.norm_counts["bin"] * self.bin_size
@@ -162,7 +162,7 @@ class TestingBinReadVisualizer:
                                         # fillcolor="rgb(0,139,139)",
                                         # line_color=possible_color_violin[i],
                                         # name=col[:col.find("_Illumina")]),
-                                        line_color=self.color_palette[i],
+                                        line_color=self.template.layout["colorway"][i],
                                         name=col),
                               row=1,
                               col=2)
@@ -183,7 +183,7 @@ class TestingBinReadVisualizer:
                                         # fillcolor="rgb(255,160,122)",
                                         # line_color=possible_color_violin[j],
                                         # name=col[:col.find("_Illumina")]),
-                                        line_color=self.color_palette[j],
+                                        line_color=self.template.layout["colorway"][j],
                                         name=col),
                               row=1,
                               col=1)
@@ -805,16 +805,7 @@ class TestingBinReadVisualizer:
 
             self.saving_plot(fig2, description="scatter_norm_clip_counts_{}_{}".format(sample, str(self.bin_size)))
 
-    def fold_change_colors(self):
-        colors = px.colors.qualitative.T10
-        colors[1] = "rgb(76,120,168)"  # dark blue
-        colors[2] = "rgb(135,197,35)"  # light green
-        colors[3] = "rgb(135,197,35)"
-        colors[4] = "rgb(184, 0, 58)"  # dark magenta
-        colors[5] = "rgb(184, 0, 58)"
-
-        self.template.layout["colorway"] = colors
-        return self.template
+    # def fold_change_colors(self):
 
     def fold_change_traces(self, pairwise, fig, x_sig, y_sig,
                            x_no_sig, y_no_sig,  marker_dict, hover_sig, hover_no_sig, trace_name):
@@ -830,7 +821,7 @@ class TestingBinReadVisualizer:
             fig.add_trace(go.Scatter(x=x_no_sig,
                                      y=y_no_sig,
                                      mode="markers",
-                                     opacity=0.2,
+                                     opacity=0.1,
                                      # marker=marker_dict,
                                      hovertext=hover_no_sig,
                                      hovertemplate="<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
@@ -847,7 +838,7 @@ class TestingBinReadVisualizer:
             fig.add_trace(go.Scatter(x=x_no_sig,
                                      y=y_no_sig,
                                      mode="markers",
-                                     opacity=0.2,
+                                     opacity=0.1,
                                      # marker=marker_dict,
                                      hovertext=hover_no_sig,
                                      hovertemplate="<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
@@ -859,7 +850,7 @@ class TestingBinReadVisualizer:
         fig.update_xaxes(title_text="Genome_Position")
         fig.update_yaxes(title_text="log2_Fold-Change")
         description = ""
-        colors = self.fold_change_colors()
+        # colors = self.fold_change_colors()
         for col in self.fold_change:
             if col != "chr" and col != "bin":
                 sig_data_pos = self.fold_change[self.fold_change[col] > fc]
@@ -884,7 +875,8 @@ class TestingBinReadVisualizer:
                                                   "Threshold_FC: ".format(control_name,
                                                                           str(self.bin_size),
                                                                           str(fc)),
-                                            colors=colors)
+                                            colors=self.fc_template)
+
                     description = "pw_fold_change_" + str(self.bin_size)
 
                 else:
@@ -893,7 +885,7 @@ class TestingBinReadVisualizer:
                                                        "Threshold_FC: ".format(control_name,
                                                                                str(self.bin_size),
                                                                                str(fc)),
-                                            colors=colors)
+                                            colors=self.fc_template)
                     description = "fold_change_" + str(self.bin_size)
 
         self.add_threshold_fc(fig, fc, len(self.fold_change))
@@ -908,7 +900,7 @@ class TestingBinReadVisualizer:
         fig.update_xaxes(title_text="Genome_Position")
         fig.update_yaxes(title_text="Clipped_log2_Fold-Change")
         description = ""
-        colors = self.fold_change_colors()
+        # colors = self.fold_change_colors()
         for col in self.clip_fold_change:
             if col != "bin" and col != "chr":
                 sig_clip_data_pos = self.clip_fold_change[self.clip_fold_change[col] > fc]
@@ -936,7 +928,7 @@ class TestingBinReadVisualizer:
                                                   "Clipped Reads Pairwise log2 Fold Change - " +
                                                   "Bin Size: {} - Threshold_FC: {}".format(str(self.bin_size),
                                                                                            str(fc)),
-                                            colors=colors)
+                                            colors=self.fc_template)
                     description = "pw_clip_fold_change_" + str(self.bin_size)
 
                 else:
@@ -945,7 +937,7 @@ class TestingBinReadVisualizer:
                                             title="All <i>vs</i> {}<br>".format(control_name) +
                                                   "Clipped Reads log2 Fold Change - " +
                                                   "Bin Size: " + str(self.bin_size) + " - Threshold_FC: " + str(fc),
-                                            colors=colors)
+                                            colors=self.fc_template)
 
                     description = "clip_fold_change_" + str(self.bin_size)
 
