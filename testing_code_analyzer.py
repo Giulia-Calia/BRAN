@@ -523,12 +523,12 @@ class TestingBinReadAnalyzer:
 
         print(sig_df)
 
-    def plot(self, plot_template, fc_template, saving_folder, saving_format, cigar, unmapped, ref_genome, fc, pairwise, control_name,
+    def plot(self, saving_folder, saving_format, cigar, unmapped, ref_genome, fc, pairwise, control_name,
              chr_name=None, sample=None):
         visualizer = TestingBinReadVisualizer(self.bin_size, self.parameters["read_counts"], self.norm, self.log_norm,
                                               self.norm_clip, self.log_norm_clip, self.parameters["unmapped_reads"],
                                               self.norm_unmapped, self.fold_change, self.clipped_fold_change,
-                                              saving_folder, saving_format, plot_template, fc_template)
+                                              saving_folder, saving_format)
 
         if chr_name and sample:
             visualizer.plot_chr_sample(chr_name, sample, cigar)
@@ -694,28 +694,7 @@ if __name__ == "__main__":
                         action="store_true",
                         help="if identifier class is needed")
 
-    # pio.templates.default = "seaborn+none"
-    # template = "seaborn+none"
-    template = pio.templates["seaborn"]
-    # colors = px.colors.qualitative.T10
-    color_palette = ["rgb(183, 10, 48)", "rgb(255, 186, 8)", "rgb(63, 163, 197)", "rgb(3, 84, 99)", "rgb(110, 29, 93)",
-                     "rgb(235, 181, 155)", "rgb(188, 178, 215)", "rgb(196, 235, 112)", "rgb(196, 90, 140)",
-                     "rgb(32, 100, 186)", "rgb(255, 0, 75)", "rgb(109, 89, 122)", "rgb(165, 255, 186)",
-                     "rgb(196, 51, 122)", "rgb(255, 132, 11)", "rgb(121, 110, 192)"]
-    # colors[1] = "rgb(135,197,35)"  # light green
-    # colors[2] = "rgb(184, 0, 58)"  # dark magenta
-    # colors[3] = "rgb(255,165,0)"  # yellow/orange
-    # template.layout["colorway"] = colors
-    template.layout["colorway"] = color_palette
-    template.layout["font"]["color"] = "#2a3f5f"  # to verify: "#DC143C"
 
-    fc_template = pio.templates["seaborn"]
-    fc_color = []
-    for color in color_palette:
-        fc_color += [color, color]
-
-    fc_template.layout["colorway"] = fc_color
-    template.layout["font"]["color"] = "#2a3f5f"
 
     args = parser.parse_args()
     dict_args = vars(parser.parse_args([]))
@@ -779,7 +758,7 @@ if __name__ == "__main__":
 
     analyzer.output_sig_positions(args.fold_change, args.control_name, args.output_pickle)
     # exit(1)
-    analyzer.plot(template, fc_template, plots_folder, args.saving_format, args.cigar,
+    analyzer.plot(plots_folder, args.saving_format, args.cigar,
                   args.unmapped, args.reference, args.fold_change, args.pairwise, args.control_name,
                   chr_name=args.chromosome, sample=args.sample)
 

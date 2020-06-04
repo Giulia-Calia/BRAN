@@ -16,7 +16,7 @@ from plotly.subplots import make_subplots
 
 class TestingBinReadVisualizer:
     def __init__(self, bin_size, counts, norm, log_norm, norm_clip, log_norm_clip, unmapped,
-                 norm_unmapped, fold_change, clip_fold_change, saving_folder, saving_format, template, fc_template):
+                 norm_unmapped, fold_change, clip_fold_change, saving_folder, saving_format):
         self.bin_size = bin_size
         self.read_counts = counts
         self.norm_counts = norm
@@ -29,13 +29,29 @@ class TestingBinReadVisualizer:
         self.clip_fold_change = clip_fold_change
         self.saving_folder = saving_folder
         self.saving_format = saving_format
-        self.template = template
-        self.fc_template = fc_template
 
     def sorted_chromosomes(self, column):
         convert = lambda text: int(text) if text.isdigit() else text
         alphanum_key = lambda key: [convert(c) for c in re.split('([0-9]+)', key)]
         return sorted(column, key=alphanum_key)
+
+    def color_palette(self, fc_colors=False):
+        template = pio.templates["seaborn"]
+        template.layout["font"]["color"] = "#2a3f5f"  # to verify: "#DC143C"
+        color_palette = ["rgb(183, 10, 48)", "rgb(255, 186, 8)", "rgb(63, 163, 197)", "rgb(3, 84, 99)",
+                         "rgb(110, 29, 93)", "rgb(235, 181, 155)", "rgb(188, 178, 215)", "rgb(196, 235, 112)",
+                         "rgb(196, 90, 140)", "rgb(32, 100, 186)", "rgb(255, 0, 75)", "rgb(109, 89, 122)",
+                         "rgb(165, 255, 186)", "rgb(196, 51, 122)", "rgb(255, 132, 11)", "rgb(121, 110, 192)"]
+
+        if fc_colors:
+            fc_palette = []
+            for color in color_palette:
+                fc_palette += [color, color]
+            template.layout["colorway"] = fc_palette
+        else:
+            template.layout["colorway"] = color_palette
+
+        return template
 
     def saving_plot(self, fig, description):
         acceptable_formats = ["svg", "jpeg", "pdf", "png"]
@@ -162,7 +178,7 @@ class TestingBinReadVisualizer:
                                         # fillcolor="rgb(0,139,139)",
                                         # line_color=possible_color_violin[i],
                                         # name=col[:col.find("_Illumina")]),
-                                        line_color=self.template.layout["colorway"][i],
+                                        line_color=self.color_palette().layout["colorway"][i],
                                         name=col),
                               row=1,
                               col=2)
@@ -183,7 +199,7 @@ class TestingBinReadVisualizer:
                                         # fillcolor="rgb(255,160,122)",
                                         # line_color=possible_color_violin[j],
                                         # name=col[:col.find("_Illumina")]),
-                                        line_color=self.template.layout["colorway"][j],
+                                        line_color= self.color_palette().layout["colorway"][j],
                                         name=col),
                               row=1,
                               col=1)
@@ -262,13 +278,13 @@ class TestingBinReadVisualizer:
 
     def scatter_layout(self, fig, title):
         fig.update_layout(title=title,
-                          template=self.template,
+                          template=self.color_palette(),
                           legend_orientation="h",
                           legend=dict(x=-0.01, y=1.05))
 
-    def fold_change_layout(self, fig, title, colors):
+    def fold_change_layout(self, fig, title):
         fig.update_layout(title=title,
-                          template=colors,
+                          template=self.color_palette(fc_colors=True),
                           legend_orientation="h")
 
     def plot_scatter(self, ref_genome=False, ns=False, fig=go.Figure()):
@@ -806,6 +822,12 @@ class TestingBinReadVisualizer:
             self.saving_plot(fig2, description="scatter_norm_clip_counts_{}_{}".format(sample, str(self.bin_size)))
 
     # def fold_change_colors(self):
+    #     palette = self.template.layout["colorway"]
+    #     fc_palette = []
+    #     for color in palette:
+    #         fc_palette += [color, color]
+    #     fc_palette_array = np.array(fc_palette)
+    #     return fc_palette_array
 
     def fold_change_traces(self, pairwise, fig, x_sig, y_sig,
                            x_no_sig, y_no_sig,  marker_dict, hover_sig, hover_no_sig, trace_name):
@@ -874,8 +896,7 @@ class TestingBinReadVisualizer:
                                             title="Each <i>vs</i> {}<br>Pairwise log2 Fold Change - Bin Size: {} - "
                                                   "Threshold_FC: ".format(control_name,
                                                                           str(self.bin_size),
-                                                                          str(fc)),
-                                            colors=self.fc_template)
+                                                                          str(fc)))
 
                     description = "pw_fold_change_" + str(self.bin_size)
 
@@ -884,8 +905,7 @@ class TestingBinReadVisualizer:
                     self.fold_change_layout(fig, title="All Mean <i>vs</i> {}<br>log2 Fold Change - Bin Size: {} - "
                                                        "Threshold_FC: ".format(control_name,
                                                                                str(self.bin_size),
-                                                                               str(fc)),
-                                            colors=self.fc_template)
+                                                                               str(fc)))
                     description = "fold_change_" + str(self.bin_size)
 
         self.add_threshold_fc(fig, fc, len(self.fold_change))
@@ -927,8 +947,7 @@ class TestingBinReadVisualizer:
                                             title="Each <i>vs</i> {}<br>".format(control_name) +
                                                   "Clipped Reads Pairwise log2 Fold Change - " +
                                                   "Bin Size: {} - Threshold_FC: {}".format(str(self.bin_size),
-                                                                                           str(fc)),
-                                            colors=self.fc_template)
+                                                                                           str(fc)))
                     description = "pw_clip_fold_change_" + str(self.bin_size)
 
                 else:
@@ -936,8 +955,7 @@ class TestingBinReadVisualizer:
                     self.fold_change_layout(fig,
                                             title="All <i>vs</i> {}<br>".format(control_name) +
                                                   "Clipped Reads log2 Fold Change - " +
-                                                  "Bin Size: " + str(self.bin_size) + " - Threshold_FC: " + str(fc),
-                                            colors=self.fc_template)
+                                                  "Bin Size: " + str(self.bin_size) + " - Threshold_FC: " + str(fc))
 
                     description = "clip_fold_change_" + str(self.bin_size)
 
@@ -980,8 +998,7 @@ class TestingBinReadVisualizer:
                                                               control_name,
                                                               str(self.bin_size),
                                                               fc,
-                                                              chr_name),
-                                    colors=self.fold_change_colors())
+                                                              chr_name))
 
             x_axis = len(sig_bins) + len(not_sig_bins)
             self.add_threshold_fc(fig, fc, x_axis)
@@ -1020,8 +1037,7 @@ class TestingBinReadVisualizer:
                                                                                         control_name,
                                                                                         chr_name,
                                                                                         str(self.bin_size),
-                                                                                        fc),
-                                        colors=self.fold_change_colors())
+                                                                                        fc))
 
                 x_axis = len(sig_bins) + len(not_sig_bins)
                 self.add_threshold_fc(fig2, fc, x_axis)
@@ -1093,8 +1109,7 @@ class TestingBinReadVisualizer:
                                           "- Chr: {}".format(control_name,
                                                              str(self.bin_size),
                                                              fc,
-                                                             chr_name),
-                                    colors=self.fold_change_colors())
+                                                             chr_name))
 
             self.fold_change_layout(fig2,
                                     title="Clipped Pairwise Fold Change Each <i>vs</i> {}"
@@ -1102,8 +1117,7 @@ class TestingBinReadVisualizer:
                                           "- Chr: {}".format(control_name,
                                                              str(self.bin_size),
                                                              fc,
-                                                             chr_name),
-                                    colors=self.fold_change_colors())
+                                                             chr_name))
 
             self.saving_plot(fig, description="pw_fc_{}_{}".format(chr_name, str(self.bin_size)))
             self.saving_plot(fig2, description="clip_pw_fc_{}_{}".format(chr_name, str(self.bin_size)))
@@ -1115,8 +1129,7 @@ class TestingBinReadVisualizer:
                                           "- Chr: {}".format(control_name,
                                                              str(self.bin_size),
                                                              fc,
-                                                             chr_name),
-                                    colors=self.fold_change_colors())
+                                                             chr_name))
 
             self.fold_change_layout(fig2,
                                     title="Clipped Fold Change All Mean <i>vs</i> {}"
@@ -1124,8 +1137,7 @@ class TestingBinReadVisualizer:
                                           "- Chr: {}".format(control_name,
                                                              str(self.bin_size),
                                                              fc,
-                                                             chr_name),
-                                    colors=self.fold_change_colors())
+                                                             chr_name))
 
             self.saving_plot(fig, description="fc_{}_{}".format(chr_name, str(self.bin_size)))
             self.saving_plot(fig2, description="clip_fc_{}_{}".format(chr_name, str(self.bin_size)))
@@ -1164,8 +1176,7 @@ class TestingBinReadVisualizer:
                                                "- Threshold_fc: {} <br> {} <i>vs</i> {}".format(str(self.bin_size),
                                                                                                 fc,
                                                                                                 sample,
-                                                                                                control_name),
-                                    colors=self.fold_change_colors())
+                                                                                                control_name))
 
             self.add_threshold_fc(fig, fc, len_x_axis=len(self.fold_change[col]))
             self.plot_background(fig)
@@ -1206,8 +1217,7 @@ class TestingBinReadVisualizer:
                                               "Bin Size: {} - Threshold_FC: {} ".format(sample,
                                                                                         control_name,
                                                                                         str(self.bin_size),
-                                                                                        fc),
-                                        colors=self.fold_change_colors())
+                                                                                        fc))
 
                 self.add_threshold_fc(fig2, fc, len_x_axis=len(self.clip_fold_change))
                 self.plot_background(fig2)

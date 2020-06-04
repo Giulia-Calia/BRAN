@@ -133,7 +133,7 @@ if __name__ == "__main__":
                         default=[],
                         type=int,
                         help="""The bin position on the corresponding chromosome, be careful that for each position 
-                        there is on and only one chromosome""")
+                        there is one and only one chromosome""")
 
     parser.add_argument("-c", "--cigar",
                         action="store_true",
