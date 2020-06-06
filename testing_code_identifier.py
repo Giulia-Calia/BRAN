@@ -39,7 +39,50 @@ class TestingBinReadIdentifier:
         self.set_bam_list(bam)
         return self.bam
 
-    def mapped_ids(self):
+    def read_ids(self):
+        header = "ID \t str_pos \t\t end_pos"
+        for file in self.load_bam():
+            bam_file = pysam.AlignmentFile(file, "rb")
+            reads_bar = progressbar.ProgressBar(max_value=progressbar.UnknownLength)
+            update_bar = 0
+            clone_name = file[file.rfind("/") + 1:file.find(".bam")]
+            ids = open(self.saving_folder + "/read_ids_" + str(self.bin_size) + "_" + clone_name + ".tsv", "w")
+            ids.write(header + "\n")
+            print("\n", clone_name)
+            for ch, bin_str in zip(self.bins.keys(), self.bins.values()):
+                for ref in bam_file.references:
+                    if ch in ref:
+                        for read in bam_file.fetch(contig=ref):
+                            update_bar += 1
+                            reads_bar.update(update_bar)
+                            if str(read.flag) in self.flags and \
+                                    self.cigar and \
+                                    read.cigarstring is not None and \
+                                    bin_str <= int(read.reference_start) < (bin_str + self.bin_size):
+                                ids.write(read.query_name + " \t " +
+                                          str(read.reference_start) + " \t\t " +
+                                          str(int(read.reference_start) + len(read.query_sequence) - 1) + "\n")
+
+                            elif str(read.flag) in self.flags and \
+                                    not self.cigar and \
+                                    read.cigarstring is not None and \
+                                    bin_str <= int(read.reference_start) < (bin_str + self.bin_size):
+                                ids.write(read.query_name + " \t " +
+                                          str(read.reference_start) + " \t " +
+                                          str(int(read.reference_start) + len(read.query_sequence) - 1) + "\n")
+
+                            elif read.is_unmapped:
+                                # print(read)
+                                ids.write(read.query_name + " \t - \t\t - \n")
+
+                            else:
+                                continue
+                    else:
+                        continue
+
+            ids.close()
+
+    def old_mapped_ids(self):
         header = "chr \t ID \t\t clone_name \t str_pos \t end_pos  \t type"
         header_unmapped = "chr \t ID \t\t clone_name"
         for file in self.bam:
@@ -59,6 +102,7 @@ class TestingBinReadIdentifier:
                             update_bar += 1
                             reads_bar.update(update_bar)
                             if read.is_unmapped:
+                                # print(read)
                                 unmapped_ids.write(ref + " \t " + read.query_name + " \t " + clone_name + "\n")
 
                             if str(read.flag) in self.flags and \
@@ -151,7 +195,7 @@ if __name__ == "__main__":
                         action="store_true",
                         help="if identifier class is needed")
 
-    print(parser.print_help())
+    # print(parser.print_help())
     args = parser.parse_args()
 
     dict_args = vars(parser.parse_args([]))
@@ -167,11 +211,11 @@ if __name__ == "__main__":
     bin_dictionary = dict(zip(args.chromosomes, args.bin_positions))
 
     ide = TestingBinReadIdentifier(args.bin_size,
-                                   args.flag_list,
+                                   flags,
                                    args.folder,
                                    args.saving_folder,
                                    bin_dictionary,
                                    args.cigar,
                                    args.cigar_filter)
     ide.load_bam()
-    ide.mapped_ids()
+    ide.read_ids()

@@ -694,8 +694,6 @@ if __name__ == "__main__":
                         action="store_true",
                         help="if identifier class is needed")
 
-
-
     args = parser.parse_args()
     dict_args = vars(parser.parse_args([]))
 
@@ -705,62 +703,64 @@ if __name__ == "__main__":
         flags = args.flag_list
 
     if args.folder != dict_args["folder"]:
-        args.folder = dict_args["folder"] + args.folder
+        bam_folder = dict_args["folder"] + args.folder
     else:
-        pass
-
-    analyzer = TestingBinReadAnalyzer(args.folder,
-                                      args.bin_size,
-                                      args.reference,
-                                      flags,
-                                      args.cigar_filter,
-                                      args.output_pickle)
-
-    analyzer.load_data(cigar=args.cigar,
-                       cigar_filter=args.cigar_filter,
-                       reference=args.reference,
-                       read_info=args.read_info,
-                       unmapped=args.unmapped,
-                       verbose=True)
-
-    plots_folder = args.saving_folder + "plots"
-    if not os.path.exists(plots_folder):
-        os.mkdir(plots_folder)
-
-    else:
-        pass
-
-    analyzer.no_repeats_df_transformation(args.saving_folder)
-
-    analyzer.normalize_bins(args.control_name)
-    analyzer.calc_fold_change(args.control_name, args.pairwise)
-    analyzer.summary_sig_bins(args.fold_change)
+        bam_folder = args.folder
 
     if args.identifier:
         if not os.path.exists(args.saving_folder + "ids"):
-            os.mkdir(args.saving_folder + "ids")
+            sav_folder = args.saving_folder + "ids"
+            os.mkdir(sav_folder)
         else:
-            pass
+            sav_folder = args.saving_folder
 
         bin_dictionary = dict(zip(args.bin_chromosomes, args.bin_positions))
+
         ide = TestingBinReadIdentifier(args.bin_size,
-                                       args.flag_list,
-                                       args.folder,
-                                       args.saving_folder + "ids",
+                                       flags,
+                                       bam_folder,
+                                       sav_folder,
                                        bin_dictionary,
                                        args.cigar,
                                        args.cigar_filter)
-        ide.load_bam()
-        ide.mapped_ids()
+        # ide.load_bam()
+        ide.read_ids()
 
     else:
-        pass
 
-    analyzer.output_sig_positions(args.fold_change, args.control_name, args.output_pickle)
-    # exit(1)
-    analyzer.plot(plots_folder, args.saving_format, args.cigar,
-                  args.unmapped, args.reference, args.fold_change, args.pairwise, args.control_name,
-                  chr_name=args.chromosome, sample=args.sample)
+        analyzer = TestingBinReadAnalyzer(bam_folder,
+                                          args.bin_size,
+                                          args.reference,
+                                          flags,
+                                          args.cigar_filter,
+                                          args.output_pickle)
+
+        analyzer.load_data(cigar=args.cigar,
+                           cigar_filter=args.cigar_filter,
+                           reference=args.reference,
+                           read_info=args.read_info,
+                           unmapped=args.unmapped,
+                           verbose=True)
+
+        plots_folder = args.saving_folder + "plots"
+        if not os.path.exists(plots_folder):
+            os.mkdir(plots_folder)
+
+        else:
+            pass
+
+        analyzer.no_repeats_df_transformation(args.saving_folder)
+
+        analyzer.normalize_bins(args.control_name)
+        analyzer.calc_fold_change(args.control_name, args.pairwise)
+        analyzer.summary_sig_bins(args.fold_change)
+
+
+        analyzer.output_sig_positions(args.fold_change, args.control_name, args.output_pickle)
+        # exit(1)
+        analyzer.plot(plots_folder, args.saving_format, args.cigar,
+                      args.unmapped, args.reference, args.fold_change, args.pairwise, args.control_name,
+                      chr_name=args.chromosome, sample=args.sample)
 
     # ---------------------------complete_file_pickle-------------------------------------------------------------------
     # with open("../all_samples_pickles/BRAN250000_df.p", "rb") as input_param:
