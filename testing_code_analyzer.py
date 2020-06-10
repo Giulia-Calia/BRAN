@@ -742,7 +742,7 @@ if __name__ == "__main__":
                            unmapped=args.unmapped,
                            verbose=True)
 
-        plots_folder = args.saving_folder + "plots"
+        plots_folder = args.saving_folder + "plots/"
         if not os.path.exists(plots_folder):
             os.mkdir(plots_folder)
 
