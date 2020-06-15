@@ -684,9 +684,10 @@ if __name__ == "__main__":
                         help="""the name of the chromosome for each interesting bin (no repetitions)""")
 
     parser.add_argument("-bp", "--bin_positions",
-                        nargs="+",
+                        action="append",
                         default=[],
-                        type=int,
+                        # type=int,
+                        # dest="list",
                         help="""The bin position on the corresponding chromosome, be careful that for each position 
                             there is on and only one chromosome""")
 
@@ -708,23 +709,30 @@ if __name__ == "__main__":
         bam_folder = args.folder
 
     if args.identifier:
-        if not os.path.exists(args.saving_folder + "ids"):
-            sav_folder = args.saving_folder + "ids"
-            os.mkdir(sav_folder)
+        if not os.path.exists(args.saving_folder):
+            os.mkdir(args.saving_folder)
         else:
-            sav_folder = args.saving_folder
-
-        bin_dictionary = dict(zip(args.bin_chromosomes, args.bin_positions))
-
+            pass
+        # print(args.bin_chromosomes)
+        # print(args.bin_positions)
+        bin_pos = []
+        for el in args.bin_positions:
+            if len(el) > 1:
+                bin_pos.append(el.split(","))
+            else:
+                bin_pos.append(el)
+        # print(bin_pos)
+        bin_dictionary = dict(zip(args.bin_chromosomes, bin_pos))
+        # print(bin_dictionary)
         ide = TestingBinReadIdentifier(args.bin_size,
                                        flags,
                                        bam_folder,
-                                       sav_folder,
+                                       args.saving_folder,
                                        bin_dictionary,
                                        args.cigar,
                                        args.cigar_filter)
         # ide.load_bam()
-        ide.read_ids()
+        ide.get_read_ids()
 
     else:
 

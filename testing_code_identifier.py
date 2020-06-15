@@ -13,6 +13,8 @@ import pysam
 import progressbar
 # import pandas as pd
 import argparse
+import re  # regular expression
+import csv
 
 
 class TestingBinReadIdentifier:
@@ -39,8 +41,8 @@ class TestingBinReadIdentifier:
         self.set_bam_list(bam)
         return self.bam
 
-    def read_ids(self):
-        header = "ID \t str_pos \t\t end_pos"
+    def get_read_ids(self):
+        header = "{}\nID \t str_pos \t\t end_pos".format(self.bins)
         for file in self.load_bam():
             bam_file = pysam.AlignmentFile(file, "rb")
             reads_bar = progressbar.ProgressBar(max_value=progressbar.UnknownLength)
@@ -48,39 +50,84 @@ class TestingBinReadIdentifier:
             clone_name = file[file.rfind("/") + 1:file.find(".bam")]
             ids = open(self.saving_folder + "/read_ids_" + str(self.bin_size) + "_" + clone_name + ".tsv", "w")
             ids.write(header + "\n")
-            print("\n", clone_name)
-            for ch, bin_str in zip(self.bins.keys(), self.bins.values()):
-                for ref in bam_file.references:
-                    if ch in ref:
-                        for read in bam_file.fetch(contig=ref):
-                            update_bar += 1
-                            reads_bar.update(update_bar)
-                            if str(read.flag) in self.flags and \
-                                    self.cigar and \
-                                    read.cigarstring is not None and \
-                                    bin_str <= int(read.reference_start) < (bin_str + self.bin_size):
-                                ids.write(read.query_name + " \t " +
-                                          str(read.reference_start) + " \t\t " +
-                                          str(int(read.reference_start) + len(read.query_sequence) - 1) + "\n")
+            print("\n", clone_name + "\t searching for read ID")
+            read_ref_names = []
+            # print(bam_file.references)
+            for ref in bam_file.references:  # name of chr to which the read belong
+                for ch in self.bins.keys():
+                    if re.search(r'\b' + ch + r'\b', ref):
+                        # the regular expression syntax allows to get only chr1 when specified because
+                        # otherwise it would search also for chr10, chr11 ecc
+                        read_ref_names.append(ref)
+            # print(read_ref_names)
+            for ch, pos, ref_names in zip(self.bins.keys(), self.bins.values(), read_ref_names):
+                # print(ch)
+                # print(pos)
+                # print(ref_names)
+                # print(len(self.bins[ch]))
+                for bin_p in range(len(self.bins[ch])):
+                    # print(type(self.bins[ch][bin_p]))
+                    #     print(pos)
+                    for read in bam_file.fetch(contig=ref_names):
+                        update_bar += 1
+                        reads_bar.update(update_bar)
+                        start_p = int(self.bins[ch][bin_p])
+                        end_p = int(self.bins[ch][bin_p]) + self.bin_size
+                        if str(read.flag) in self.flags and \
+                                self.cigar and \
+                                read.cigarstring is not None and \
+                                start_p <= int(read.reference_start) < end_p:
+                            ids.write(read.query_name + " \t " +
+                                      str(read.reference_start) + " \t\t " +
+                                      str(int(read.reference_start) + len(read.query_sequence) - 1) + "\n")
 
-                            elif str(read.flag) in self.flags and \
-                                    not self.cigar and \
-                                    read.cigarstring is not None and \
-                                    bin_str <= int(read.reference_start) < (bin_str + self.bin_size):
-                                ids.write(read.query_name + " \t " +
-                                          str(read.reference_start) + " \t " +
-                                          str(int(read.reference_start) + len(read.query_sequence) - 1) + "\n")
+                        elif str(read.flag) in self.flags and \
+                                not self.cigar and \
+                                read.cigarstring is not None and \
+                                start_p <= int(read.reference_start) < end_p:
+                            ids.write(read.query_name + " \t " +
+                                      str(read.reference_start) + " \t " +
+                                      str(int(read.reference_start) + len(read.query_sequence) - 1) + "\n")
 
-                            elif read.is_unmapped:
-                                # print(read)
-                                ids.write(read.query_name + " \t - \t\t - \n")
+                        elif read.is_unmapped:
+                            # print(read)
+                            ids.write(read.query_name + " \t - \t\t - \n")
 
-                            else:
-                                continue
-                    else:
-                        continue
+                        else:
+                            continue
+                else:
+                    continue
 
             ids.close()
+
+    # def load_ids(self):
+    #     self.load_bam()
+    #     ids_files = []
+    #     list_header = []
+    #     for el in os.listdir(self.saving_folder):
+    #         if el.startswith("read_ids"):
+    #             ids_files.append(el)
+    #     if len(ids_files) == len(self.bam):
+    #         for file in ids_files:
+    #             with open(self.saving_folder + file) as id_file:
+    #                 read_tsv = csv.reader(id_file, delimiter="\t")
+    #                 first_line = next(read_tsv)
+    #                 # be careful because every time next(read_tsv) appear, the iterator goes ahead of one line
+    #                 if str(self.bins) in first_line:
+    #                     list_header.append(str(first_line))
+    #                     # next return a list with the line as a single string so to be interpreted by the set(),
+    #                     # each line-list has to be converted in a string
+    #                 else:
+    #                     continue
+    #         else:
+    #             pass
+    #
+    #     res = len(set(list_header)) == 1
+    #     if res == 1:
+    #         print("No need to recalculate ids, the files in current directory are what you're searching for")
+    #     else:
+    #         print("BRAN needs a while to recalculate the read IDs in the required chromosome and bin positions")
+    #         self.get_read_ids()
 
     def old_mapped_ids(self):
         header = "chr \t ID \t\t clone_name \t str_pos \t end_pos  \t type"
