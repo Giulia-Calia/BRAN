@@ -216,7 +216,7 @@ class BinReadVisualizer:
 
         fig.update_traces(opacity=0.75)
 
-        # fig.show()
+        fig.show()
 
         self.saving_plot(fig, description="violin_plot_" + str(self.bin_size))
 
@@ -275,7 +275,7 @@ class BinReadVisualizer:
 
         fig.update_traces(opacity=0.75)
 
-        # fig.show()
+        fig.show()
 
         self.saving_plot(fig, description="bar_chart_" + str(self.bin_size))
 
@@ -330,7 +330,7 @@ class BinReadVisualizer:
 
         self.plot_background(fig)
 
-        # fig.show()
+        fig.show()
 
         self.saving_plot(fig, description="scatter_all_counts_" + str(self.bin_size))
 
@@ -371,7 +371,7 @@ class BinReadVisualizer:
 
         self.plot_background(fig)
 
-        # fig.show()
+        fig.show()
 
         self.saving_plot(fig, description="scatter_norm_all_counts_" + str(self.bin_size))
 
@@ -396,7 +396,7 @@ class BinReadVisualizer:
 
         self.plot_background(fig)
 
-        # fig.show()
+        fig.show()
 
         self.saving_plot(fig, description="scatter_clip_counts" + str(self.bin_size))
 
@@ -422,7 +422,7 @@ class BinReadVisualizer:
 
         self.plot_background(fig)
 
-        # fig.show()
+        fig.show()
 
         self.saving_plot(fig, description="scatter_norm_clip_counts" + str(self.bin_size))
 
@@ -460,7 +460,7 @@ class BinReadVisualizer:
             sample,
             str(chr_name)))
 
-        # fig.show()
+        fig.show()
 
         self.saving_plot(fig, description="scatter_counts_{}_{}_{}".format(str(chr_name),
                                                                            sample,
@@ -529,7 +529,7 @@ class BinReadVisualizer:
                                                              sample,
                                                              str(chr_name)))
 
-        # fig.show()
+        fig.show()
         self.saving_plot(fig, description="scatter_norm_counts_{}_{}_{}".format(str(chr_name),
                                                                                 sample,
                                                                                 str(self.bin_size)))
@@ -597,7 +597,7 @@ class BinReadVisualizer:
                                        "<br> Chr: {}".format(str(self.bin_size),
                                                              str(chr_name)))
 
-        # fig.show()
+        fig.show()
 
         self.saving_plot(fig, description="scatter_read_counts_{}_all_{}".format(str(chr_name),
                                                                                  str(self.bin_size)))
@@ -661,7 +661,7 @@ class BinReadVisualizer:
         self.scatter_layout(fig, title="Normalized Read Counts - Bin Size: {}"
                                        "<br> Chr: {}".format(str(self.bin_size), chr_name))
 
-        # fig.show()
+        fig.show()
 
         self.saving_plot(fig, description="scatter_counts_chr_{}_all_{}".format(chr_name, str(self.bin_size)))
 
@@ -725,7 +725,7 @@ class BinReadVisualizer:
 
         self.plot_background(fig)
 
-        # fig.show()
+        fig.show()
 
         self.saving_plot(fig, description="scatter_counts_{}_{}".format(sample, str(self.bin_size)))
 
@@ -793,7 +793,7 @@ class BinReadVisualizer:
         self.scatter_layout(fig, title="Normalized Read Counts - Bin Size: {}"
                                        "<br> Clone: {}".format(str(self.bin_size), sample))
 
-        # fig.show()
+        fig.show()
 
         self.saving_plot(fig, description="scatter_norm_counts_{}_{}".format(sample, str(self.bin_size)))
 
@@ -914,7 +914,7 @@ class BinReadVisualizer:
         self.add_threshold_fc(fig, fc, len(self.fold_change))
         self.plot_background(fig)
 
-        # fig.show()
+        fig.show()
 
         self.saving_plot(fig, description=description)
 
@@ -965,7 +965,7 @@ class BinReadVisualizer:
         self.add_threshold_fc(fig, fc, len_x_axis=len(self.clip_fold_change))
         self.plot_background(fig)
 
-        # fig.show()
+        fig.show()
 
         self.saving_plot(fig, description=description)
 
@@ -1006,7 +1006,7 @@ class BinReadVisualizer:
             x_axis = len(sig_bins) + len(not_sig_bins)
             self.add_threshold_fc(fig, fc, x_axis)
 
-            # fig.show()
+            fig.show()
 
             self.saving_plot(fig, description="pw_fc_{}_{}_{}".format(chr_name, sample_pw, str(self.bin_size)))
 
@@ -1145,7 +1145,7 @@ class BinReadVisualizer:
             self.saving_plot(fig, description="fc_{}_{}".format(chr_name, str(self.bin_size)))
             self.saving_plot(fig2, description="clip_fc_{}_{}".format(chr_name, str(self.bin_size)))
 
-        # fig.show()
+        fig.show()
 
         # fig2.show()
 
@@ -1184,7 +1184,7 @@ class BinReadVisualizer:
             self.add_threshold_fc(fig, fc, len_x_axis=len(self.fold_change[col]))
             self.plot_background(fig)
 
-            # fig.show()
+            fig.show()
 
             self.saving_plot(fig, description="pw_fc_{}_{}".format(sample, str(self.bin_size)))
 
