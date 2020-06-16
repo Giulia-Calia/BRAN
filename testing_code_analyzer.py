@@ -282,7 +282,7 @@ class TestingBinReadAnalyzer:
         implemented for RNA-Seq; the normalization for clipped counts is done
         manually"""
         read_counts = self.parameters["read_counts"]
-        read_counts.to_csv(str(self.bin_size) + "read_counts_check.txt", sep="\t")
+        read_counts.to_csv(str(self.bin_size) + "_norm_counts_check.txt", sep="\t")
         # read_counts = self.no_repeats_df_transformation()
         # the edgeR package is imported using rpy2 syntax to access to all its built-in functions
         read_counts_edger = {}  # a dictionary of sample: vector_of_counts to work with edger
@@ -750,10 +750,9 @@ if __name__ == "__main__":
                            unmapped=args.unmapped,
                            verbose=True)
 
-        plots_folder = args.saving_folder + "plots/"
+        plots_folder = args.saving_folder
         if not os.path.exists(plots_folder):
             os.mkdir(plots_folder)
-
         else:
             pass
 
@@ -762,7 +761,6 @@ if __name__ == "__main__":
         analyzer.normalize_bins(args.control_name)
         analyzer.calc_fold_change(args.control_name, args.pairwise)
         analyzer.summary_sig_bins(args.fold_change)
-
 
         analyzer.output_sig_positions(args.fold_change, args.control_name, args.output_pickle)
         # exit(1)

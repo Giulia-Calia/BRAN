@@ -26,16 +26,20 @@ import os
 import argparse
 import math
 # import pickle
+import progressbar
 import re
 import plotly.graph_objects as go
-import plotly.io as pio
+# import plotly.express as px
+# import plotly.io as pio
 import pandas as pd
 import rpy2.robjects as robjects
 import rpy2.robjects.packages as rpackages
 from BinReadCounter import BinReadCounter
+from BinReadVisualizer import BinReadVisualizer
+from BinReadIdentifier import BinReadIdentifier
 from rpy2.robjects.packages import importr
 from rpy2.robjects import pandas2ri
-from plotly.subplots import make_subplots
+# from plotly.subplots import make_subplots
 
 # import plotly
 # import time
@@ -91,10 +95,7 @@ class BinReadAnalyzer:
             norm_unmapped:
             fold_change:
             clipped_fold_change:
-            sig_data:
-            clip_sig_data:
-
-    """
+      """
 
     def __init__(self, bam_folder_path, bin_size, ref_genome, flags, cigar_filter, out_pickle):
         self.folder = bam_folder_path
@@ -111,8 +112,10 @@ class BinReadAnalyzer:
         self.norm_unmapped = None
         self.fold_change = None
         self.clipped_fold_change = None
-        self.sig_data = None
-        self.clip_sig_data = None
+        self.sig_bins = None
+        # self.no_sig_bins = None
+        self.sig_clip_bins = None
+        # self.no_sig_clip_bins = None
 
     def set_parameters(self, param):
         """set parameters as actual parameters"""
@@ -149,13 +152,19 @@ class BinReadAnalyzer:
         """set fold-change for clipped read counts"""
         self.clipped_fold_change = clip_fc
 
-    def set_sig_data(self, sig_data):
+    def set_sig_bins(self, sig_data):
         """set the data structure of significant read fold-change counts"""
-        self.sig_data = sig_data
+        self.sig_bins = sig_data
 
-    def set_clip_sig_data(self, clip_sig_data):
+    # def set_no_sig_bins(self, no_sig_data):
+    #     self.no_sig_bins = pd.concat([no_sig_data])
+
+    def set_sig_clip_bins(self, sig_clip_data):
         """set the data structure of significant clipped fold-change counts"""
-        self.clip_sig_data = clip_sig_data
+        self.sig_clip_bins = sig_clip_data
+
+    # def set_no_sig_clip_bins(self, no_sig_clip_data):
+    #     self.no_sig_clip_bins = pd.concat([no_sig_clip_data])
 
     def load_data(self, cigar, cigar_filter=None, reference=None, read_info=None, unmapped=None,
                   verbose=False):
@@ -247,7 +256,7 @@ class BinReadAnalyzer:
         alphanum_key = lambda key: [convert(c) for c in re.split('([0-9]+)', key)]
         return sorted(column, key=alphanum_key)
 
-    def no_repeats_df_transformation(self):
+    def no_repeats_df_transformation(self, saving_folder):
         read_counts = self.parameters["read_counts"]
         # print(read_counts)
         chr_list = list(read_counts["chr"].value_counts().index)
@@ -260,7 +269,7 @@ class BinReadAnalyzer:
         sorted_df = sorted_df.reset_index(drop=True)
         self.set_read_counts(sorted_df)
         # print("sorted_read_counts: \n", self.parameters["read_counts"])
-        sorted_df.to_csv("sorted_df.txt", sep="\t")
+        sorted_df.to_csv(saving_folder + "sorted_df.txt", sep="\t")
         return self.parameters["read_counts"]
 
     def normalize_bins(self, control_name):
@@ -271,19 +280,31 @@ class BinReadAnalyzer:
         implemented for RNA-Seq; the normalization for clipped counts is done
         manually"""
         read_counts = self.parameters["read_counts"]
-        read_counts.to_csv(str(self.bin_size) + "read_counts_check.txt", sep="\t")
+        read_counts.to_csv(str(self.bin_size) + "_norm_counts_check.txt", sep="\t")
         # read_counts = self.no_repeats_df_transformation()
         # the edgeR package is imported using rpy2 syntax to access to all its built-in functions
         read_counts_edger = {}  # a dictionary of sample: vector_of_counts to work with edger
         clipped_count = {}
 
+        print("\n")
+        print("Normalization process:\n")
+
+        norm_bar = progressbar.ProgressBar(max_value=progressbar.UnknownLength)
+        update_bar = 0
+
         for col in read_counts:
             if col != "chr" and col != 'bin' and "cig_filt" not in col:
+                # print(list(read_counts[col]))
                 # creates an element of the dictionary [sample_name]: r_vector_of_counts
                 read_counts_edger[col] = robjects.IntVector(read_counts[col])
 
+                # print(read_counts_edger[col])
+
             elif "cig_filt" in col:
+                # print(list(read_counts[col]))
                 clipped_count[col] = read_counts[col]
+            update_bar += 1
+            norm_bar.update(update_bar)
 
         read_counts_edger_df = robjects.DataFrame(read_counts_edger)  # R data frame
         norm_counts = edger.cpm(read_counts_edger_df, normalized_lib_sizes=True)
@@ -298,10 +319,6 @@ class BinReadAnalyzer:
 
         norm_counts_df = pd.DataFrame(norm_counts_dict)
         norm_counts_df = pd.concat([read_counts["chr"], read_counts['bin'], norm_counts_df], axis=1)
-        print("--------------------------------")
-
-        print("--------------------------------")
-
 
         # print(read_counts[["chr", "bin"]])
         # print(norm_counts_df)
@@ -325,8 +342,11 @@ class BinReadAnalyzer:
                     log_norm_clip[col].append(0)
                 else:
                     log_norm_clip[col].append(math.log2(row))
+            update_bar += 1
+            norm_bar.update(update_bar)
 
         norm_clip_df = pd.DataFrame(norm_clip)
+        norm_clip_df = pd.concat([read_counts["chr"], read_counts["bin"], norm_clip_df], axis=1)
         log_norm_clip_df = pd.DataFrame(log_norm_clip)
         log_norm_clip_df = pd.concat([read_counts["chr"], read_counts['bin'], log_norm_clip_df], axis=1)
 
@@ -337,27 +357,35 @@ class BinReadAnalyzer:
         norm_unmapped = {}
         for el in unmapped:
             norm_unmapped[el] = unmapped[el] / (sum(read_counts[el]) / 1000000)
+            update_bar += 1
+            norm_bar.update(update_bar)
 
         self.set_norm_unmapped(norm_unmapped)
-
+        # print(norm_clip_df)
         return self.norm, self.log_norm, self.norm_clip, self.log_norm_clip, self.norm_unmapped
 
     def calc_fold_change(self, control_name, pairwise=False):
         # fc = self.log_norm["test6_alignSort_REDONE"] - self.log_norm["reference30x_alignSort"]
 
         if pairwise:
+            print("\nPairwise Fold Change calculation:\n")
+            pw_fc_bar = progressbar.ProgressBar(max_value=progressbar.UnknownLength)
+            update_bar = 0
             fc_read_counts = {"chr": self.log_norm["chr"], "bin": self.log_norm["bin"]}
             for col in self.log_norm:
                 if col != control_name and col != "bin" and col != "chr":
                     pw_fc = self.log_norm[col] - self.log_norm[control_name]
                     fc_read_counts[col + "-" + control_name] = list(pw_fc)
+                    update_bar += 1
+                    pw_fc_bar.update(update_bar)
 
             fc_clipped_counts = {"chr": self.log_norm_clip["chr"], "bin": self.log_norm_clip["bin"]}
             for col in self.log_norm_clip:
                 if col != control_name + "_cig_filt" and col != "bin" and col != "chr":
                     pw_clipped_fc = self.log_norm_clip[col] - self.log_norm_clip[control_name + "_cig_filt"]
                     fc_clipped_counts[col + "-" + control_name] = list(pw_clipped_fc)
-
+                    update_bar += 1
+                    pw_fc_bar.update(update_bar)
             fc_df = pd.DataFrame(fc_read_counts)
             fc_clip_df = pd.DataFrame(fc_clipped_counts)
             print(fc_clip_df)
@@ -368,8 +396,14 @@ class BinReadAnalyzer:
             return self.fold_change, self.clipped_fold_change
 
         else:
+            print("\nOne vs All Fold Change calculation:\n")
+            fc_bar = progressbar.ProgressBar(max_value=progressbar.UnknownLength)
+            fc_update_bar = 0
             fc_all = self.log_norm[["chr", "bin"]]
             clones_norm_df = self.log_norm.drop(columns=["chr", "bin", control_name]).mean(axis=1)
+            for el in range(len(clones_norm_df)):
+                fc_update_bar += 1
+                fc_bar.update(fc_update_bar)
             tmp_fc = pd.DataFrame({"fc": clones_norm_df - self.log_norm[control_name]})
             fc_all = pd.concat([fc_all, tmp_fc], axis=1)
 
@@ -385,97 +419,58 @@ class BinReadAnalyzer:
             self.set_clipped_fold_change(fc_clip_all)
             return self.fold_change, self.clipped_fold_change
 
-    # def plot_background(self, fig):  # , df_counts
-    #     read_counts = self.parameters["read_counts"]
-    #     # # print(read_counts)
-    #     # sorted_df = read_counts.sort_values(["chr", "bin"])
-    #     # # print(sorted_df)
-    #     # # self.sorted_chromosomes(read_counts["chr"])
-    #     # print(self.sorted_chromosomes(read_counts["chr"]))
-    #     # sorted_df.to_csv("read_counts.txt", sep="\t")
-    #     # read_counts = df_counts
-    #     coordinates_x = []
-    #     coordinates_y = []
-    #     chromosomes = []
-    #     start = 0
-    #
-    #     for ch in read_counts["chr"]:
-    #         # if ch[ch.find("c"):] not in chromosomes:
-    #         if ch not in chromosomes:
-    #             chromosomes.append(ch)
-    #     # if the chromosomes are not sorted in ascending order, using the sort_
-    #     # chromosomes method, we sort alphanumeric strings
-    #     chromosomes = self.sorted_chromosomes(chromosomes)
-    #     # print(chromosomes)
-    #     for chrom in chromosomes:
-    #         single_df = read_counts[read_counts["chr"] == chrom]
-    #         # here start and end are updated every time, to allow concatenation of chromosomes on the plot
-    #         # the average position within the interval of each chromosome take in account only the length of the
-    #         # interval itself
-    #         length = (single_df["bin"].iloc[-1] + 1) * self.parameters["bin_size"]
-    #         tmp_end = start + length
-    #         # print("start", start)
-    #         # print("end", tmp_end)
-    #         avg = start + length / 2
-    #         coordinates_x.append(avg)
-    #         coordinates_y.append(-5)
-    #         if int(chrom[chrom.find("r") + 1:]) % 2 == 0:
-    #             fig.add_shape(go.layout.Shape(type="rect",
-    #                                           xref="x",
-    #                                           yref="paper",
-    #                                           x0=start,
-    #                                           y0=0,
-    #                                           x1=tmp_end,
-    #                                           y1=1,
-    #                                           fillcolor="rgb(230, 230, 250)",  # lavande
-    #                                           opacity=0.5,
-    #                                           layer="below",
-    #                                           line_width=0))
-    #         else:
-    #             fig.add_shape(go.layout.Shape(type="rect",
-    #                                           xref="x",
-    #                                           yref="paper",
-    #                                           x0=start,
-    #                                           y0=0,
-    #                                           x1=tmp_end,
-    #                                           y1=1,
-    #                                           fillcolor="rgb(240, 248, 255)",  # ~light_mint_green
-    #                                           opacity=0.5,
-    #                                           layer="below",
-    #                                           line_width=0))
-    #
-    #         start = tmp_end
-    #
-    #     fig.add_trace(go.Scatter(x=coordinates_x,
-    #                              y=coordinates_y,
-    #                              text=chromosomes,
-    #                              mode="text",
-    #                              showlegend=False,
-    #                              ))
-    #     # fig.show()
-    #     return fig
+    def summary_sig_bins(self, fc):
+        # dataframe for information on significant BINS
+        summary_sig_data = {"chr": [], "start_pos": [], "end_pos": [], "clone_name": [], "type": [], "fc": []}
+        summary_sig_clip_data = {"chr": [], "start_pos": [], "end_pos": [], "clone_name": [], "type": [], "fc": []}
 
-    def add_threshold_fc(self, fig, fc):
-        read_counts = self.parameters["read_counts"]
+        for col in self.fold_change.columns:
+            if col != "chr" and col != "bin":
+                sig_data_pos = self.fold_change[self.fold_change[col] > fc]
+                sig_data_neg = self.fold_change[self.fold_change[col] < -fc]
 
-        fig.add_shape(go.layout.Shape(type="line",
-                                      x0=0,
-                                      y0=fc,
-                                      x1=len(read_counts) * self.bin_size,
-                                      y1=fc))
+                sig_data = pd.concat([sig_data_pos, sig_data_neg])
 
-        fig.add_shape(go.layout.Shape(type="line",
-                                      x0=0,
-                                      y0=-fc,
-                                      x1=len(read_counts) * self.bin_size,
-                                      y1=-fc))
+                # print(sig_data)
+                summary_sig_data["chr"] += list(sig_data["chr"])
+                # print(len(list(sig_data["chr"])))
+                summary_sig_data["start_pos"] += (list(sig_data["bin"] * self.bin_size))
+                # print(len(sig_data["bin"] * self.bin_size))
+                summary_sig_data["end_pos"] += (list((sig_data["bin"] * self.bin_size) + self.bin_size))
+                # print(len((sig_data["bin"] * self.bin_size) + self.bin_size))
+                summary_sig_data["clone_name"] += [col] * len(sig_data)
+                # print(len([col] * len(sig_data)))
+                summary_sig_data["type"] += ["read_count"] * len(sig_data)
+                # print(len(["clipped_count"] * len(sig_data)))
+                summary_sig_data["fc"] += ["+"] * len(sig_data_pos) + ["-"] * len(sig_data_neg)
 
-        fig.update_shapes(dict(xref="x",
-                               yref="y",
-                               line=dict(color="crimson",  # dark red
-                                         width=1)))
+        sum_sig_bins = pd.DataFrame(summary_sig_data)
 
-        return fig
+        for col in self.clipped_fold_change:
+            if col != "chr" and col != "bin":
+                sig_clip_data_pos = self.clipped_fold_change[self.clipped_fold_change[col] > fc]
+                sig_clip_data_neg = self.clipped_fold_change[self.clipped_fold_change[col] < -fc]
+
+                sig_clip_data = pd.concat([sig_clip_data_pos, sig_clip_data_neg])
+
+                # print(sig_bins)
+                summary_sig_clip_data["chr"] += list(sig_clip_data["chr"])
+                # print(len(list(sig_clip_data["chr"])))
+                summary_sig_clip_data["start_pos"] += (list(sig_clip_data["bin"] * self.bin_size))
+                # print(len(sig_clip_data["bin"] * self.bin_size))
+                summary_sig_clip_data["end_pos"] += (list((sig_clip_data["bin"] * self.bin_size) + self.bin_size))
+                # print(len((sig_clip_data["bin"] * self.bin_size) + self.bin_size))
+                summary_sig_clip_data["clone_name"] += [col.replace("_cig_filt", "")] * len(sig_clip_data)
+                # print(len([col] * len(sig_clip_data)))
+                summary_sig_clip_data["type"] += ["clipped_count"] * len(sig_clip_data)
+                # print(len(["clipped_count"] * len(sig_clip_data)))
+                summary_sig_clip_data["fc"] += ["+"] * len(sig_clip_data_pos) + ["-"] * len(sig_clip_data_neg)
+
+        sum_sig_clip_bins = pd.DataFrame(summary_sig_clip_data)
+
+        self.set_sig_bins(sum_sig_bins)
+        self.set_sig_clip_bins(sum_sig_clip_bins)
+        return self.sig_bins, self.sig_clip_bins
 
     def add_ns_trace(self, fig, reference=None, chrom=None):
         """This method is used in other plotting methods, in order to add the
@@ -512,1083 +507,9 @@ class BinReadAnalyzer:
         else:
             print("Sorry, to add this trace to the plot, you have to specify the reference file name\nPlease try again")
 
-    def plot_counts_distributions(self, saving_folder):  # , cigar
-        read_counts = self.parameters["read_counts"]
-        counts_to_plot = []
-        col_labels = []
+    def output_sig_positions(self, fc, control_name, file_output_path):
 
-        # --plot_raw_counts_distribution--
-        fig_all = go.Figure()
-        fig_all.update_yaxes(title_text="Raw_Counts")
-
-        for col in read_counts.columns:
-            if col != "chr" and col != 'bin' and "cig_filt" not in col:
-                counts_to_plot.append(read_counts[col])
-                col_labels.append(col)
-
-                fig_all.add_trace(go.Violin(y=read_counts[col],
-                                            box_visible=True,
-                                            meanline_visible=True,
-                                            name=col))
-
-        # --plot_norm_counts_distribution--
-
-        fig_all_norm = go.Figure()
-        fig_all_norm.update_traces(opacity=0.75)
-        fig_all_norm.update_yaxes(title_text="Normalized_Counts")
-
-        for col in self.norm:
-            if col != "chr" and col != "bin":
-                fig_all_norm.add_trace(go.Violin(y=self.norm[col],
-                                                 box_visible=True,
-                                                 meanline_visible=True,
-                                                 name=col))
-
-        # --plot_log_scaled_norm_counts_distribution--
-
-        fig_log_norm = go.Figure()
-        fig_log_norm.update_traces(opacity=0.75)
-        fig_log_norm.update_yaxes(title_text="Log_Normalized_Counts")
-
-        for col in self.log_norm:
-            # fig_log_norm.add_trace(go.Box(x=list(self.log_norm.rx(True, i + 1)),
-            #                               name=str(self.log_norm.colnames[i])))
-            if col != "chr" and col != "bin":
-                fig_log_norm.add_trace(go.Violin(y=self.log_norm[col],
-                                                 box_visible=True,
-                                                 meanline_visible=True,
-                                                 name=col))
-
-        # --Titles--
-
-        fig_all.update_layout(title_text="Violin Plot RAW data - BRAN" + str(self.bin_size) + " - all samples",
-                              legend_orientation="h")
-
-        fig_all_norm.update_layout(title_text="Violin Plot NORMALIZED data - BRAN" +
-                                              str(self.bin_size) + " - all samples",
-                                   legend_orientation="h")
-
-        fig_log_norm.update_layout(title_text="Violin Plot LOG-SCALE NORMALIZED data - BRAN" +
-                                              str(self.bin_size) + " - all samples",
-                                   legend_orientation="h")
-
-        # fig_all.show()
-        # fig_all_norm.show()
-        # fig_log_norm.show()
-        # save_fig_all = fig_all.write_image(saving_folder + "all_sample_dist_" + str(self.bin_size) + ".jpeg",
-        #                                    width=1280,
-        #                                    height=1024)
-        # save_fig_all_norm = fig_all_norm.write_image(saving_folder + "all_sample_norm_dist_" +
-        #                                              str(self.bin_size) + ".jpeg",
-        #                                              width=1280,
-        #                                              height=1024)
-        # save_fig_log_norm = fig_log_norm.write_image(saving_folder + "all_sample_norm_log_dist_" +
-        #                                              str(self.bin_size) + ".jpeg",
-        #                                              width=1280,
-        #                                              height=1024)
-
-    def plot_chrom_sample(self, saving_folder, reference, chrom, sample, template, ns=False,
-                          fig=go.Figure()):  # , cigar
-        """This method allows to obtain a scatter-plot of raw read_counts
-        for a specific chromosome and a specific sample
-
-        Args:
-            reference (bool): true if the reference is declared
-            chrom (int): a number representing the chromosome of interest
-            sample (str): the name of the sample of interest (it corresponds
-                          to the name of the column in the data structure)
-            ns (bool): by default sets to False, but is one want to include
-                       the Ns count trace, it has to set to True
-            fig (obj): is a go.Figure() object for the building of the plot
-
-        Returns:
-            A scatter-plot of counts
-        """
-        read_counts = self.parameters["read_counts"]
-
-        fig.update_xaxes(title_text="Chromosomes_Position")
-        fig.update_yaxes(title_text="Read_Count_Per_Bin")
-
-        c_name = None
-        for c in list(read_counts["chr"]):
-            if c.endswith(str(chrom)):
-                c_name = c
-
-        single_chrom = read_counts[read_counts["chr"] == c_name]
-        col_list = list(single_chrom.columns)
-        hover_pos = single_chrom["bin"] * self.bin_size
-        for i in range(len(col_list[:col_list.index(sample)]) + 1):
-            if col_list[i] == sample:
-                fig.add_trace(go.Scatter(x=hover_pos,  # list(single_chrom.index * self.bin_size),
-                                         y=single_chrom[sample],
-                                         hovertext=hover_pos,
-                                         hovertemplate=
-                                         "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                         mode="markers",
-                                         name=str(col_list[i])))
-
-        if ns:
-            self.add_ns_trace(fig, reference=reference, chrom=chrom)
-
-        fig.update_layout(title="Read Counts - Clone: " +
-                                sample +
-                                " - Chr: " + str(chrom) +
-                                " - Bin Size: " + str(self.bin_size),
-                          template=template,
-                          legend_orientation="h")
-
-        # fig.show()
-        # save_fig = fig.write_image(saving_folder +
-        #                            "scatter_counts_chr" +
-        #                            str(chrom) +
-        #                            sample +
-        #                            str(self.bin_size) +
-        #                            ".jpeg",
-        #                            width=1280,
-        #                            height=1024)
-
-    def plot_chromosome(self, saving_folder, reference, chrom, template, ns=False, fig=go.Figure()):  # , cigar
-        """This method allows to obtain a scatter-plot of raw_read_counts
-        of all samples, but for a specific chromosome of interest
-
-        Args:
-            reference (bool): true if the reference is declared
-            chrom (int): a number representing the chromosome of interest
-            ns (bool): by default sets to False, but is one want to include
-                       the Ns count trace, it has to set to True
-            fig (obj): is a go.Figure() object for the building of the plot
-
-        Returns:
-            A scatter-plot of counts
-        """
-        read_counts = self.parameters["read_counts"]
-
-        fig.update_xaxes(title_text="Chromosomes_Position")
-        fig.update_yaxes(title_text="Read_Count_Per_Bin")
-
-        c_name = None
-        for c in list(read_counts["chr"]):
-            if c.endswith(str(chrom)):
-                c_name = c
-
-        single_chrom = read_counts[read_counts["chr"] == c_name]
-        col_list = list(single_chrom.columns)
-        hover_pos = single_chrom["bin"] * self.bin_size
-        for i in range(len(col_list)):
-            if col_list[i] != "chr" and col_list[i] != "bin" and "cig_filt" not in col_list[i]:
-                fig.add_trace(go.Scatter(x=hover_pos,  # list(single_chrom.index * self.bin_size),
-                                         y=single_chrom[col_list[i]],
-                                         hovertext=hover_pos,
-                                         hovertemplate=
-                                         "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                         mode="markers",
-                                         name=str(col_list[i])))
-        if ns:
-            self.add_ns_trace(fig, reference=reference, chrom=chrom)
-
-        fig.update_layout(title="Read Counts - All Clones - Chr: " + str(chrom) +
-                                " - Bin Size: " + str(self.bin_size),
-                          template=template,
-                          legend_orientation="h")
-
-        # fig.show()
-        # save_fig = fig.write_image(saving_folder +
-        #                            "scatter_counts_chr_" +
-        #                            str(chrom) + "_" +
-        #                            str(self.bin_size) +
-        #                            ".jpeg",
-        #                            width=1280,
-        #                            height=1024)
-
-    def plot_sample(self, saving_folder, reference, sample, template, ns=False, fig=go.Figure()):  # , cigar
-        """This method allows to obtain a scatter-plot of raw_read_counts
-        of all chromosomes, but for a specific sample of interest
-
-        Args:
-            reference (bool): true if the reference is declared
-            sample (str): the name of the sample of interest (it corresponds
-                          to the name of the column in the data structure)
-            ns (bool): by default sets to False, but is one want to include
-                       the Ns count trace, it has to set to True
-            fig (obj): is a go.Figure() object for the building of the plot
-
-        Returns:
-            A scatter-plot of counts
-        """
-        read_counts = self.parameters["read_counts"]
-
-        fig.update_xaxes(title_text="Genome_Position")
-        fig.update_yaxes(title_text="Read_Count_Per_Bin")
-
-        col_read_counts = list(read_counts.columns)
-        hover_pos = read_counts["bin"] * self.bin_size
-        for i in range(len(col_read_counts[:col_read_counts.index(sample)]) + 1):
-            if col_read_counts[i] == sample:
-                fig.add_trace(go.Scatter(x=list(read_counts.index * self.bin_size),
-                                         y=read_counts[sample],
-                                         hovertext=hover_pos,
-                                         hovertemplate=
-                                         "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                         mode="markers",
-                                         name=str(col_read_counts[i])))
-
-        if ns:
-            self.add_ns_trace(fig, reference=reference)
-
-        # self.plot_background(fig)
-
-        fig.update_layout(title="Read Counts - Clone: " + sample +
-                                " - Bin Size: " + str(self.bin_size),
-                          template=template,
-                          legend_orientation="h")
-
-        # fig.show()
-        # save_fig = fig.write_image(saving_folder +
-        #                            "scatter_counts_" +
-        #                            sample + "_" +
-        #                            str(self.bin_size) + ".jpeg",
-        #                            width=1280,
-        #                            height=1024)
-
-    def plot_all(self, saving_folder, reference, template, ns=False, fig=go.Figure()):  # df_counts, bin_size / , cigar
-        """This method allows to obtain a scatter-plot of raw_read_counts
-        of all chromosomes and all samples
-
-        Args:
-            reference (bool): true if the reference is declared
-            ns (bool): by default sets to False, but is one want to include
-                       the Ns count trace, it has to set to True
-            fig (obj): is a go.Figure() object for the building of the plot
-
-        Returns:
-            A scatter-plot of counts
-        """
-        read_counts = self.parameters["read_counts"]
-        col_list = list(read_counts.columns)
-        hover_pos = read_counts["bin"] * self.bin_size
-
-        fig.update_xaxes(title_text="Genome_Position")
-        fig.update_yaxes(title_text="Raw_Read_Count_Per_Bin")
-
-        for i in range(len(col_list)):
-            if col_list[i] != "chr" and col_list[i] != "bin" and "cig_filt" not in col_list[i]:
-                fig.add_trace(go.Scatter(x=list(read_counts.index * self.bin_size),
-                                         y=read_counts[col_list[i]],
-                                         hovertext=hover_pos,
-                                         hovertemplate=
-                                         "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                         mode="markers",
-                                         # name=str(col_list[i][:col_list[i].find("_Illumina")])))
-                                         name=str(col_list[i][:col_list[i].find("_")])))
-                # general_application------------------------------------------------------------------
-                fig.update_layout(title="Read Counts - All Clones - All Chromosomes - Bin Size: " +
-                                        str(self.bin_size),
-                                  template=template,
-                                  legend_orientation="h")
-
-                # test_application----------------------------------------------------------------------
-                # if "ref" not in col_list[i]:
-                #     fig.update_layout(title="{}<br>Read Counts - All Chromosomes - Bin Size: {}".format(col_list[i][:col_list[i].find("_")],
-                #                                                                                 str(self.bin_size
-                #                                                                                     )),
-                #                       template=template,
-                #                       legend_orientation="h")
-        if ns:
-            self.add_ns_trace(fig, reference=reference)
-
-        # self.plot_background(fig)
-
-        fig.show()
-
-        save_fig = fig.write_image(saving_folder +
-                                   "scatter_all_counts_"
-                                   + str(self.bin_size) +
-                                   ".jpeg",
-                                   width=1920,
-                                   height=1080)
-
-    def plot_norm_data_chr_sample(self, saving_folder, reference, chrom, sample, template, ns=False,
-                                  fig=go.Figure()):  # , cigar
-        """This method allows to obtain a scatter-plot of normalized_read_counts
-        of a specific chromosome of a specific sample
-
-        Args:
-            reference (bool): true if the reference is declared
-            chrom (int): a number representing the chromosome of interest
-            sample (str): the name of the sample of interest (it corresponds
-                          to the name of the column in the data structure)
-            ns (bool): by default sets to False, but is one want to include
-                       the Ns count trace, it has to set to True
-            fig (obj): is a go.Figure() object for the building of the plot
-
-        Returns:
-            A scatter-plot of normalized counts
-        """
-        fig.update_xaxes(title_text="Chromosome_Position")
-        fig.update_yaxes(title_text="Norm_Read_Count_Per_Bin")
-
-        c_name = None
-        for c in self.norm["chr"].value_counts().index:
-            if c.endswith(str(chrom)):
-                c_name = c
-
-        single_chrom = self.norm[self.norm["chr"] == c_name]
-        hover_pos = single_chrom["bin"] * self.bin_size
-        for col in single_chrom:
-            if col == sample:
-                fig.add_trace(go.Scatter(x=hover_pos,  # list(single_chrom.index * self.bin_size),
-                                         y=single_chrom[col],
-                                         hovertext=hover_pos,
-                                         hovertemplate=
-                                         "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y:.0f}",
-                                         mode="markers",
-                                         name=col))
-        if ns:
-            self.add_ns_trace(fig, reference=reference, chrom=chrom)
-
-        fig.update_layout(title="Normalized Read Counts - Clone: " +
-                                sample +
-                                " - Chr: " +
-                                str(chrom) +
-                                " - Bin Size: " +
-                                str(self.bin_size),
-                          template=template,
-                          legend_orientation="h")
-
-        # fig.show()
-
-        # save_fig = fig.write_image(saving_folder + "scatter_norm_counts_chr_" +
-        #                            str(chrom) + "_" +
-        #                            sample + "_" +
-        #                            str(self.bin_size) + ".jpeg",
-        #                            width=1280,
-        #                            height=1024)
-
-    def plot_norm_data_chr(self, saving_folder, reference, chrom, template, ns=False, fig=go.Figure()):  # , cigar
-        """This method allows to obtain a scatter-plot of normalized_read_counts
-        of a specific chromosome for all samples
-
-        Args:
-            reference (bool): true if the reference is declared
-            chrom (int): a number representing the chromosome of interest
-            ns (bool): by default sets to False, but is one want to include
-                       the Ns count trace, it has to set to True
-            fig (obj): is a go.Figure() object for the building of the plot
-
-        Returns:
-            A scatter-plot of normalized counts
-        """
-        fig.update_xaxes(title_text="Chromosome_position")
-        fig.update_yaxes(title_text="Norm_Read_Count_Per_Bin")
-
-        c_name = None
-        for c in self.norm["chr"].value_counts().index:
-            if c.endswith(str(chrom)):
-                c_name = c
-
-        single_chrom = self.norm[self.norm["chr"] == c_name]
-        hover_pos = single_chrom["bin"] * self.bin_size
-        for col in single_chrom:
-            if col != "chr" and col != "bin":
-                fig.add_trace(go.Scatter(x=hover_pos,  # list(single_chrom.index * self.bin_size),
-                                         y=single_chrom[col],
-                                         hovertext=hover_pos,
-                                         hovertemplate=
-                                         "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y:.0f}",
-                                         mode="markers",
-                                         name=col))
-        if ns:
-            self.add_ns_trace(fig, reference=reference, chrom=chrom)
-
-        fig.update_layout(title="Normalized Read Counts - Clone: all - Chr: " +
-                                str(chrom) +
-                                " - Bin Size: " +
-                                str(self.bin_size),
-                          template=template,
-                          legend_orientation="h")
-
-        # fig.show()
-        #
-        # save_fig = fig.write_image(saving_folder +
-        #                            "scatter_norm_counts_chr_" +
-        #                            str(chrom) + "_" +
-        #                            str(self.bin_size) +
-        #                            ".jpeg",
-        #                            width=1280,
-        #                            height=1024)
-
-    def plot_norm_data_sample(self, saving_folder, reference, sample, template, control_name, ns=False,
-                              fig=go.Figure()):  # cigar,
-        """This method allows to obtain a scatter-plot of normalized_read_counts
-        in all chromosomes of a specific sample
-
-        Args:
-            reference (bool): true if the reference is declared
-            sample (str): the name of the sample of interest (it corresponds
-                          to the name of the column in the data structure)
-            ns (bool): by default sets to False, but is one want to include
-                       the Ns count trace, it has to set to True
-            fig (obj): is a go.Figure() object for the building of the plot
-
-        Returns:
-            A scatter-plot of normalized counts
-        """
-        fig.update_xaxes(title_text="Genome_Position")
-        fig.update_yaxes(title_text="Norm_Read_Count_Per_Bin")
-
-        hover_pos = self.norm["bin"] * self.bin_size
-        for col in self.norm:
-            if col == sample:
-                fig.add_trace(go.Scatter(x=list(self.norm.index * self.bin_size),
-                                         y=self.norm[col],
-                                         hovertext=hover_pos,
-                                         hovertemplate=
-                                         "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y:.0f}",
-                                         mode="markers",
-                                         name=col))
-
-        if ns:
-            self.add_ns_trace(fig, reference=reference)
-
-        # self.plot_background(fig)
-
-        fig.update_layout(title="Normalized Read Counts - Clone: " +
-                                sample +
-                                " - Chr: all - Bin Size: " +
-                                str(self.bin_size),
-                          template=template,
-                          legend_orientation="h")
-
-        # fig.show()
-        # save_fig = fig.write_image(saving_folder +
-        #                            "scatter_norm_counts_" +
-        #                            sample + "_" +
-        #                            str(self.bin_size) +
-        #                            ".jpeg",
-        #                            width=1280,
-        #                            height=1024)
-
-    def plot_norm_data_all(self, saving_folder, reference, template, ns=False, fig=go.Figure()):  # df_counts, bin_size / cigar
-        """This method allows to obtain a scatter-plot of normalized_read_counts
-        in all chromosomes and for all samples
-
-        Args:
-            reference (bool): true if the reference is declared
-            ns (bool): by default sets to False, but is one want to include
-                       the Ns count trace, it has to set to True
-            fig (obj): is a go.Figure() object for the building of the plot
-
-        Returns:
-            A scatter-plot of normalized counts
-        """
-        fig.update_xaxes(title_text="Genome_Position")
-        fig.update_yaxes(title_text="Norm_Read_Count_Per_Bin")
-
-        hover_pos = self.norm["bin"] * self.bin_size
-        for col in self.norm:
-            if col != "chr" and col != "bin":
-                fig.add_trace(go.Scatter(x=list(self.norm.index * self.bin_size),
-                                         y=self.norm[col],
-                                         hovertext=hover_pos,
-                                         hovertemplate=
-                                         "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y:.0f}",
-                                         mode="markers",
-                                         # name=col[:col.find("_Illumina")]))
-                                         name=col[:col.find("_")]))
-                # general_application------------------------------------------------------------------
-                fig.update_layout(title="Normalized Read Counts - Clone: all - Chr: all - Bin Size: " +
-                                        str(self.bin_size),
-                                  template=template,
-                                  legend_orientation="h")
-
-                # test_application-----------------------------------------------------------------------
-                # if "ref" not in col:
-                #     fig.update_layout(title="{}<br>Normalized Read Counts - All Chromosomes - Bin Size: {}".format(col[:col.find("_")],
-                #                                                                                              str(self.bin_size
-                #                                                                                                  )),
-                #                   template=template,
-                #                   legend_orientation="h")
-
-        if ns:
-            self.add_ns_trace(fig, reference=reference)
-
-        # self.plot_background(fig)
-
-        fig.show()
-        save_fig = fig.write_image(saving_folder + "scatter_norm_all_counts_" +
-                                   str(self.bin_size) +
-                                   ".jpeg",
-                                   width=1920,
-                                   height=1080)
-
-    def plot_fold_change_chr_sample(self, pairwise, fc, chrom, sample, control_name, saving_folder):
-        """"""
-        if pairwise:
-            fig = go.Figure()
-
-            fig.update_xaxes(title_text="Chromosome_Position")
-            fig.update_yaxes(title_text="Fold-Change")
-
-            c_name = None
-            for c in self.fold_change["chr"].value_counts().index:
-                if c.endswith(str(chrom)):
-                    c_name = c
-
-            single_chrom = self.fold_change[self.fold_change["chr"] == c_name]
-            for col in single_chrom:
-                if col == sample + "-" + control_name:
-                    sig_data_pos = single_chrom[["chr", "bin", col]][single_chrom[col] > fc]
-                    sig_data_neg = single_chrom[["chr", "bin", col]][single_chrom[col] < -fc]
-                    sig_data = pd.concat([sig_data_pos, sig_data_neg])
-                    not_sig_data = single_chrom[["chr", "bin", col]].drop(
-                        list(sig_data_pos.index) + list(sig_data_neg.index))
-
-                    hover_pos_sig = sig_data["bin"] * self.bin_size
-                    hover_pos_no_sig = not_sig_data["bin"] * self.bin_size
-
-                    fig.add_trace(go.Scatter(x=hover_pos_sig,  # list(sig_data.index * self.bin_size),
-                                             y=sig_data[col],
-                                             mode="markers",
-                                             hovertext=hover_pos_sig,
-                                             hovertemplate=
-                                             "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                             name=col))
-                    fig.add_trace(go.Scatter(x=hover_pos_no_sig,  # list(not_sig_data.index * self.bin_size),
-                                             y=not_sig_data[col],
-                                             mode="markers",
-                                             marker=dict(size=5, color="rgb(176, 196, 222)"),
-                                             hovertext=hover_pos_no_sig,
-                                             hovertemplate=
-                                             "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                             legendgroup="group",
-                                             name=col))
-
-                    fig.update_layout(title="Pairwise Fold Change - Chromosome: " + c_name +
-                                            " - Clone: " + str(sample) + " vs " + str(control_name) +
-                                            " - Bin Size: " + str(self.bin_size) +
-                                            " - Threshold_FC: " + str(fc),
-                                      legend_orientation="h")
-
-                    # save_fig = fig.write_image(saving_folder +
-                    #                            "pairwise_fold_change_" +
-                    #                            c_name + "_" +
-                    #                            sample + "_" +
-                    #                            str(self.bin_size) +
-                    #                            ".jpeg",
-                    #                            width=1280,
-                    #                            height=1024)
-
-            # fig.show()
-
-        else:
-            print("""ATTENTION: if parameter '-pw' not give, its impossible to retrieve graphical information 
-                  on single sample fold-change. \nPlease TRY AGAIN specifying '-pw' or '--pairwise' in command line""")
-
-    def plot_fold_change_chr(self, pairwise, fc, chrom, saving_folder):
-        """"""
-        fig = go.Figure()
-
-        fig.update_xaxes(title_text="Chromosome_Position")
-        fig.update_yaxes(title_text="Fold-Change")
-
-        c_name = None
-        for c in self.fold_change["chr"].value_counts().index:
-            if c.endswith(str(chrom)):
-                c_name = c
-        single_chrom = self.fold_change[self.fold_change["chr"] == c_name]
-        if pairwise:
-            for col in single_chrom:
-                if col != "chr" and col != "bin":
-                    sig_data_pos = single_chrom[["chr", "bin", col]][single_chrom[col] > fc]
-                    sig_data_neg = single_chrom[["chr", "bin", col]][single_chrom[col] < -fc]
-                    sig_data = pd.concat([sig_data_pos, sig_data_neg])
-                    not_sig_data = single_chrom[["chr", "bin", col]].drop(
-                        list(sig_data_pos.index) + list(sig_data_neg.index))
-
-                    hover_pos_sig = sig_data["bin"] * self.bin_size
-                    hover_pos_no_sig = not_sig_data["bin"] * self.bin_size
-
-                    fig.add_trace(go.Scatter(x=hover_pos_sig,  # list(sig_data.index * self.bin_size),
-                                             y=sig_data[col],
-                                             mode="markers",
-                                             hovertext=hover_pos_sig,
-                                             hovertemplate=
-                                             "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                             name=col))
-                    fig.add_trace(go.Scatter(x=hover_pos_no_sig,  # list(not_sig_data.index * self.bin_size),
-                                             y=not_sig_data[col],
-                                             mode="markers",
-                                             marker=dict(size=5, color="rgb(176, 196, 222)"),
-                                             hovertext=hover_pos_no_sig,
-                                             hovertemplate=
-                                             "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                             legendgroup="group",
-                                             name=col))
-
-                    fig.update_layout(title="Pairwise Fold Change - Chromosome: " + c_name +
-                                            " - Each clone vs reference - Bin Size: " + str(self.bin_size) +
-                                            " - Threshold_FC: " + str(fc),
-                                      legend_orientation="h")
-
-                    # save_fig = fig.write_image(saving_folder +
-                    #                            "pairwise_fold_change_" +
-                    #                            c_name + "_" +
-                    #                            str(self.bin_size) +
-                    #                            ".jpeg",
-                    #                            width=1280,
-                    #                            height=1024)
-
-            # fig.show()
-
-        else:
-            for col in list(single_chrom.columns):
-                if col != "bin" and col != "chr":
-                    sig_data_pos = single_chrom[single_chrom[col] > fc]
-                    sig_data_neg = single_chrom[single_chrom[col] < -fc]
-                    sig_data = pd.concat([sig_data_pos, sig_data_neg])
-                    not_sig_data = single_chrom.drop(list(sig_data_pos.index) + list(sig_data_neg.index))
-                    hover_pos_sig = sig_data["bin"] * self.bin_size
-                    hover_pos_no_sig = not_sig_data["bin"] * self.bin_size
-
-                    fig.add_trace(go.Scatter(x=hover_pos_sig,  # list(sig_data.index * self.bin_size),
-                                             y=sig_data[col],
-                                             mode="markers",
-                                             hovertext=hover_pos_sig,
-                                             hovertemplate=
-                                             "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                             name="Significant Differences"))
-                    fig.add_trace(go.Scatter(x=hover_pos_no_sig,  # list(not_sig_data.index * self.bin_size),
-                                             y=not_sig_data[col],
-                                             mode="markers",
-                                             marker=dict(size=5, color="rgb(176, 196, 222)"),
-                                             hovertext=hover_pos_no_sig,
-                                             hovertemplate=
-                                             "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                             legendgroup="group",
-                                             name="Not Significant Differences"))
-
-                    fig.update_layout(title="Fold Change - Chromosome: " + c_name + "Clone: all vs Reference - "
-                                                                                    "Bin Size: " + str(
-                        self.bin_size) + " - Threshold_FC: " + str(fc),
-                                      legend_orientation="h")
-
-                # save_fig = fig.write_image(saving_folder +
-                #                            "fold_change_" +
-                #                            c_name + "_" +
-                #                            str(self.bin_size) +
-                #                            ".jpeg",
-                #                            width=1280,
-                #                            height=1024)
-
-            # fig.show()
-
-    def plot_fold_change_sample(self, pairwise, fc, sample, control_name, saving_folder):
-        """"""
-        if pairwise:
-            fig = go.Figure()
-
-            fig.update_xaxes(title_text="Genome_Position")
-            fig.update_yaxes(title_text="Fold_change")
-
-            for col in self.fold_change:
-                if col == sample + "-" + control_name:
-                    sig_data_pos = self.fold_change[["chr", "bin", col]][self.fold_change[col] > fc]
-                    sig_data_neg = self.fold_change[["chr", "bin", col]][self.fold_change[col] < -fc]
-                    sig_data = pd.concat([sig_data_pos, sig_data_neg])
-                    not_sig_data = self.fold_change[["chr", "bin", col]].drop(list(sig_data_pos.index) +
-                                                                              list(sig_data_neg.index))
-
-                    hover_pos_sig = sig_data["bin"] * self.bin_size
-                    hover_pos_no_sig = not_sig_data["bin"] * self.bin_size
-
-                    fig.add_trace(go.Scatter(x=list(sig_data.index * self.bin_size),
-                                             y=sig_data[col],
-                                             mode="markers",
-                                             hovertext=hover_pos_sig,
-                                             hovertemplate=
-                                             "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                             name=col))
-                    fig.add_trace(go.Scatter(x=list(not_sig_data.index * self.bin_size),
-                                             y=not_sig_data[col],
-                                             mode="markers",
-                                             marker=dict(size=5, color="rgb(176, 196, 222)"),
-                                             hovertext=hover_pos_no_sig,
-                                             hovertemplate=
-                                             "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                             legendgroup="group",
-                                             name=col))
-
-                    fig.update_layout(title="Pairwise Fold Change - All chromosomes - Clone: " +
-                                            str(sample) + " vs " + str(control_name) +
-                                            " - Bin Size: " + str(self.bin_size) +
-                                            " - Threshold_FC: " + str(fc),
-                                      legend_orientation="h")
-
-                    # save_fig = fig.write_image(saving_folder +
-                    #                            "pairwise_fold_change_sample_"
-                    #                            + str(self.bin_size) +
-                    #                            ".jpeg",
-                    #                            width=1280,
-                    #                            height=1024)
-
-            self.add_threshold_fc(fig, fc)
-            # self.plot_background(fig)
-            # fig.show()
-
-        else:
-            print("""ATTENTION: if parameter '-pw' not give, its impossible to retrieve graphical information 
-                  on single sample fold-change. \nPlease TRY AGAIN specifying '-pw' or '--pairwise' in command line""")
-
-    def plot_fold_change(self, fc, saving_folder, pairwise, control_name):
-        """"""
-        fig = go.Figure()
-
-        fig.update_xaxes(title_text="Genome_Position")
-        fig.update_yaxes(title_text="log2_Fold-Change")
-        summary_sig_data = {"chr": [], "start_pos": [], "end_pos": [], "clone_name": [], "type": [], "fc": []}
-
-        if pairwise:
-            for col in self.fold_change:
-                if col != "bin" and col != "chr":
-                    sig_data_pos = self.fold_change[["chr", "bin", col]][self.fold_change[col] > fc]
-                    sig_data_neg = self.fold_change[["chr", "bin", col]][self.fold_change[col] < -fc]
-                    sig_data = pd.concat([sig_data_pos, sig_data_neg])
-
-                    # print(sig_data)
-                    summary_sig_data["chr"] += list(sig_data["chr"])
-                    # print(len(list(sig_data["chr"])))
-                    summary_sig_data["start_pos"] += (list(sig_data["bin"] * self.bin_size))
-                    # print(len(sig_data["bin"] * self.bin_size))
-                    summary_sig_data["end_pos"] += (list((sig_data["bin"] * self.bin_size) + self.bin_size))
-                    # print(len((sig_data["bin"] * self.bin_size) + self.bin_size))
-                    summary_sig_data["clone_name"] += [col] * len(sig_data)
-                    # print(len([col] * len(sig_data)))
-                    summary_sig_data["type"] += ["read_count"] * len(sig_data)
-                    # print(len(["clipped_count"] * len(sig_data)))
-                    summary_sig_data["fc"] += ["+"] * len(sig_data_pos) + ["-"] * len(sig_data_neg)
-                    # print(["+"] * len(sig_data_pos))
-                    not_sig_data = self.fold_change[["chr", "bin", col]].drop(list(sig_data_pos.index) +
-                                                                              list(sig_data_neg.index))
-
-                    hover_pos_sig = sig_data["bin"] * self.bin_size
-                    hover_pos_no_sig = not_sig_data["bin"] * self.bin_size
-
-                    fig.add_trace(go.Scatter(x=list(sig_data.index * self.bin_size),
-                                             y=sig_data[col],
-                                             mode="markers",
-                                             hovertext=hover_pos_sig,
-                                             hovertemplate=
-                                             "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                             # name=col[:col.find("_Illumina")],
-                                             legendgroup= "group",
-                                             name=col[:col.find("_")]))
-                    fig.add_trace(go.Scatter(x=list(not_sig_data.index * self.bin_size),
-                                             y=not_sig_data[col],
-                                             mode="markers",
-                                             marker=dict(size=5, color="rgb(176, 196, 222)"),
-                                             hovertext=hover_pos_no_sig,
-                                             hovertemplate=
-                                             "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                             legendgroup="group",
-                                             # name=col[:col.find("_Illumina")] + "_no_significant"))
-                                             name=col[:col.find("_")] + "_no_significant"))
-
-                    # general application ----------------------------------------------------------------------
-                    fig.update_layout(
-                            title="Each <i>vs</i> {}<br>Pairwise log2 Fold Change - Bin Size: {} - Threshold_FC: ".format(control_name[:control_name.find("_Illumina")],
-                                                                                                               str(self.bin_size),
-                                                                                                               str(fc)),
-                            legend_orientation="h")
-
-                    # test_application ---------------------------------------------------------------------------------
-                    # fig.update_layout(
-                    #     title="{} <i>vs</i> {}<br>Pairwise log2 Fold Change - Bin Size: {} - Threshold_FC: ".format(col[:col.find("_")],
-                    #                                                                                        control_name[:control_name.find("_")],
-                    #                                                                                        str(self.bin_size),
-                    #                                                                                        str(fc)),
-                    #     legend_orientation="h")
-
-            self.add_threshold_fc(fig, fc)
-            # self.plot_background(fig)
-
-            fig.show()
-            save_fig = fig.write_image(saving_folder +
-                                       "pairwise_fold_change_" +
-                                       str(self.bin_size) +
-                                       ".jpeg",
-                                       width=1920,
-                                       height=1080)
-
-            summary_sig_data = pd.DataFrame(summary_sig_data)
-            # print(summary_sig_data)
-            self.set_sig_data(summary_sig_data)
-            return self.sig_data
-
-        else:
-            for col in list(self.fold_change.columns):
-                if col != "bin" and col != "chr":
-                    sig_data_pos = self.fold_change[self.fold_change[col] > fc]
-                    sig_data_neg = self.fold_change[self.fold_change[col] < -fc]
-                    sig_data = pd.concat([sig_data_pos, sig_data_neg])
-
-                    # print(sig_data)
-                    summary_sig_data["chr"] += list(sig_data["chr"])
-                    # print(len(list(sig_data["chr"])))
-                    summary_sig_data["start_pos"] += (list(sig_data["bin"] * self.bin_size))
-                    # print(len(sig_data["bin"] * self.bin_size))
-                    summary_sig_data["end_pos"] += (list((sig_data["bin"] * self.bin_size) + self.bin_size))
-                    # print(len((sig_data["bin"] * self.bin_size) + self.bin_size))
-                    summary_sig_data["clone_name"] += [col] * len(sig_data)
-                    # print(len([col] * len(sig_data)))
-                    summary_sig_data["event"] += ["read_count"] * len(sig_data)
-                    # print(len(["clipped_count"] * len(sig_data)))
-
-                    not_sig_data = self.fold_change.drop(list(sig_data_pos.index) + list(sig_data_neg.index))
-                    hover_pos_sig = sig_data["bin"] * self.bin_size
-                    hover_pos_no_sig = not_sig_data["bin"] * self.bin_size
-
-                    fig.add_trace(go.Scatter(x=list(sig_data.index * self.bin_size),
-                                             y=sig_data[col],
-                                             mode="markers",
-                                             hovertext=hover_pos_sig,
-                                             hovertemplate=
-                                             "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                             name="Significant Differences"))
-                    fig.add_trace(go.Scatter(x=list(not_sig_data.index * self.bin_size),
-                                             y=not_sig_data[col],
-                                             mode="markers",
-                                             marker=dict(size=5, color="rgb(176, 196, 222)"),
-                                             hovertext=hover_pos_no_sig,
-                                             hovertemplate=
-                                             "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                             legendgroup="group",
-                                             name="Not Significant Differences"))
-
-                    fig.update_layout(title="log2 Fold Change - Clone: all vs Reference - "
-                                            "Bin Size: " + str(self.bin_size) + " - Threshold_FC: " + str(fc),
-                                      legend_orientation="h")
-
-            self.add_threshold_fc(fig, fc)
-            # self.plot_background(fig)
-
-            fig.show()
-
-            save_fig = fig.write_image(saving_folder +
-                                       "fold_change_" +
-                                       str(self.bin_size) +
-                                       ".jpeg",
-                                       width=1920,
-                                       height=1080)
-
-            summary_sig_data = pd.DataFrame(summary_sig_data)
-            # print(summary_sig_data)
-            self.set_sig_data(summary_sig_data)
-            return self.sig_data
-
-    def plot_filtered_reads(self, saving_folder):
-        read_counts = self.parameters["read_counts"]
-        fig = go.Figure()
-
-        fig.update_xaxes(title_text="Genome_Position")
-        fig.update_yaxes(title_text="Norm_Clipped_Read_counts")
-
-        for col in read_counts:
-            if "cig_filt" in col:  # and col[:col.find("cig_filt")] != control_ref:
-                hover_pos = read_counts["bin"] * self.bin_size
-                fig.add_trace(go.Scatter(x=list(self.norm_clip[col].index * self.bin_size),
-                                         y=self.norm_clip[col],
-                                         hovertext=hover_pos,
-                                         hovertemplate=
-                                         "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                         hoverinfo="text",
-                                         mode="markers",
-                                         # name=col[:col.find("_Illumina")]))
-                                        name=col[:col.find("_")]))
-
-                # general application--------------------------------------------------------------------------------
-                fig.update_layout(title="Norm_Clipped_Read_Counts - Bin Size: {}".format(str(self.bin_size)),
-                                  legend_orientation="h")
-                # test_application-------------------------------------------------------------------------------------
-                # if "ref" not in col:
-                #     fig.update_layout(title="{}<br>Norm_Clipped_Read_Counts - Bin Size: {}".format(col[:col.find("_")],
-                #                                                                              str(self.bin_size)),
-                #                   legend_orientation="h")
-
-        # self.plot_background(fig)
-
-        fig.show()
-        save_fig = fig.write_image(saving_folder + "clipped_reads_counts" + str(self.bin_size) + ".jpeg",
-                                   width=1920,
-                                   height=1080)
-
-    def plot_filt_reads_fold_change(self, fc, pairwise, control_name, saving_folder):
-        fig = go.Figure()
-
-        fig.update_xaxes(title_text="Genome_Position")
-        fig.update_yaxes(title_text="Clipped_log2_Fold-Change")
-
-        # print(self.fold_change[self.fold_change > 1.5])
-
-        summary_sig_data = {"chr": [], "start_pos": [], "end_pos": [], "clone_name": [], "type": [], "fc": []}
-
-        if pairwise:
-            for col in self.clipped_fold_change:
-                if col != "bin" and col != "chr":
-                    sig_data_pos = self.clipped_fold_change[["chr", "bin", col]][self.clipped_fold_change[col] > fc]
-                    sig_data_neg = self.clipped_fold_change[["chr", "bin", col]][self.clipped_fold_change[col] < -fc]
-                    sig_data = pd.concat([sig_data_pos, sig_data_neg])
-
-                    # print(sig_data)
-                    summary_sig_data["chr"] += list(sig_data["chr"])
-                    # print(len(list(sig_data["chr"])))
-                    summary_sig_data["start_pos"] += (list(sig_data["bin"] * self.bin_size))
-                    # print(len(sig_data["bin"] * self.bin_size))
-                    summary_sig_data["end_pos"] += (list((sig_data["bin"] * self.bin_size) + self.bin_size))
-                    # print(len((sig_data["bin"] * self.bin_size) + self.bin_size))
-                    summary_sig_data["clone_name"] += [col.replace("_cig_filt", "")] * len(sig_data)
-                    # print(len([col] * len(sig_data)))
-                    summary_sig_data["type"] += ["clipped_count"] * len(sig_data)
-                    # print(len(["clipped_count"] * len(sig_data)))
-                    summary_sig_data["fc"] += ["+"] * len(sig_data_pos) + ["-"] * len(sig_data_neg)
-
-                    not_sig_data = self.clipped_fold_change[["chr", "bin", col]].drop(list(sig_data_pos.index) +
-                                                                                      list(sig_data_neg.index))
-
-                    hover_pos_sig = sig_data["bin"] * self.bin_size
-                    hover_pos_no_sig = not_sig_data["bin"] * self.bin_size
-
-                    fig.add_trace(go.Scatter(x=list(sig_data.index * self.bin_size),
-                                             y=sig_data[col],
-                                             mode="markers",
-                                             hovertext=hover_pos_sig,
-                                             hovertemplate=
-                                             "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                             legendgroup="group",
-                                             # name=col[:col.find("_Illumina")]))
-                                             name=col[:col.find("_")]))
-                    fig.add_trace(go.Scatter(x=list(not_sig_data.index * self.bin_size),
-                                             y=not_sig_data[col],
-                                             mode="markers",
-                                             marker=dict(size=5, color="rgb(176, 196, 222)"),
-                                             hovertext=hover_pos_no_sig,
-                                             hovertemplate=
-                                             "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                             legendgroup="group",
-                                             # name=col[:col.find("_Illumina")] + "_no_significant"))
-                                             name=col[:col.find("_")] + "_no_significant"))
-                    # all_sig_data_name = pd.concat([all_sig_data, name], axis=1)
-                    # print(list(name.index))
-                    # general application -----------------------------------------------------------------------
-                    fig.update_layout(
-                        title="Each <i>vs</i> {}<br>Clipped Reads Pairwise log2 Fold Change - Bin Size: {} - "
-                              "Threshold_FC: {}".format(control_name[:control_name.find("_Illumina")],
-                                                        str(self.bin_size),
-                                                        str(fc)),
-                        legend_orientation="h")
-                    # test_application -----------------------------------------------------------------------------
-                    # fig.update_layout(title="{} <i>vs</i> {}<br>Clipped Reads Pairwise log2 Fold Change - Bin Size: {} - "
-                    #                         "Threshold_FC: {}".format(col[:col.find("_")],
-                    #                                                   control_name[:control_name.find("_")],
-                    #                                                   str(self.bin_size),
-                    #                                                   str(fc)),
-                    #                   legend_orientation="h")
-
-            self.add_threshold_fc(fig, fc)
-            # self.plot_background(fig)
-            fig.show()
-            save_fig = fig.write_image(saving_folder +
-                                       "pairwise_clipped_fold_change_" +
-                                       str(self.bin_size) +
-                                       ".jpeg",
-                                       width=1920,
-                                       height=1080)
-
-            save_fig = fig.write_image(saving_folder +
-                                       "pairwise_clipped_fold_change_" +
-                                       str(self.bin_size) +
-                                       ".svg",
-                                       width=1920,
-                                       height=1080)
-
-
-            # print(len(summary_sig_data["chr"]))
-            # print(len(summary_sig_data["start_pos"]))
-            # print(len(summary_sig_data["end_pos"]))
-            # print(len(summary_sig_data["clone_name"]))
-            # print(len(summary_sig_data["event"]))
-            print(summary_sig_data["fc"])
-
-            summary_sig_data = pd.DataFrame(summary_sig_data)
-            print(summary_sig_data)
-            self.set_clip_sig_data(summary_sig_data)
-            return self.clip_sig_data
-
-        else:
-            for col in list(self.clipped_fold_change.columns):
-                print(col)
-                if col != "bin" and col != "chr":
-                    print(col)
-                    sig_data_pos = self.clipped_fold_change[self.clipped_fold_change[col] > fc]
-                    sig_data_neg = self.clipped_fold_change[self.clipped_fold_change[col] < -fc]
-                    sig_data = pd.concat([sig_data_pos, sig_data_neg])
-
-                    # print(sig_data)
-                    summary_sig_data["chr"] += list(sig_data["chr"])
-                    # print(len(list(sig_data["chr"])))
-                    summary_sig_data["start_pos"] += (list(sig_data["bin"] * self.bin_size))
-                    # print(len(sig_data["bin"] * self.bin_size))
-                    summary_sig_data["end_pos"] += (list((sig_data["bin"] * self.bin_size) + self.bin_size))
-                    # print(len((sig_data["bin"] * self.bin_size) + self.bin_size))
-                    summary_sig_data["clone_name"] += [col.replace("_cig_filt", "")] * len(sig_data)
-                    # print(len([col] * len(sig_data)))
-                    summary_sig_data["event"] += ["clipped_count"] * len(sig_data)
-                    # print(len(["clipped_count"] * len(sig_data)))
-
-                    not_sig_data = self.clipped_fold_change.drop(list(sig_data_pos.index) + list(sig_data_neg.index))
-                    # print(sig_data)
-                    # print(self.clipped_fold_change)
-                    hover_pos_sig = sig_data["bin"] * self.bin_size
-                    hover_pos_no_sig = not_sig_data["bin"] * self.bin_size
-
-                    fig.add_trace(go.Scatter(x=list(sig_data.index * self.bin_size),
-                                             y=sig_data[col],
-                                             mode="markers",
-                                             hovertext=hover_pos_sig,
-                                             hovertemplate=
-                                             "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                             name="Significant Differences"))
-                    fig.add_trace(go.Scatter(x=list(not_sig_data.index * self.bin_size),
-                                             y=not_sig_data[col],
-                                             mode="markers",
-                                             marker=dict(size=5, color="rgb(176, 196, 222)"),
-                                             hovertext=hover_pos_no_sig,
-                                             hovertemplate=
-                                             "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                             legendgroup="group",
-                                             name="Not Significant Differences"))
-
-                    fig.update_layout(title="Clipped Reads log2 Fold Change - Clone: all vs Reference - "
-                                            "Bin Size: " + str(self.bin_size) + " - Threshold_FC: " + str(fc),
-                                      legend_orientation="h")
-
-            self.add_threshold_fc(fig, fc)
-            # self.plot_background(fig)
-            fig.show()
-            save_fig = fig.write_image(saving_folder +
-                                       "clipped_fold_change_" +
-                                       str(self.bin_size) +
-                                       ".jpeg",
-                                       width=1280,
-                                       height=1024)
-
-            summary_sig_data = pd.DataFrame(summary_sig_data)
-            # print(summary_sig_data)
-            self.set_clip_sig_data(summary_sig_data)
-            return self.clip_sig_data
-
-    def sig_positions_output_file(self, fc, control_name, file_output_path):
-
-        sig_df = pd.concat([self.sig_data, self.clip_sig_data])
+        sig_df = pd.concat([self.sig_bins, self.sig_clip_bins])
         sig_df = sig_df.sort_values(by=["clone_name", "chr", "start_pos"])
 
         header = "# Chromosome positions in which fold-change is > " + str(fc) + \
@@ -1600,135 +521,64 @@ class BinReadAnalyzer:
 
         print(sig_df)
 
-    def plot_violin_dist_counts(self, saving_folder):
-        """"""
-        # only for the scope of analysis on chardonnay
-        # [ corn_flower_blue, dark_cyan, dark_orange ,crimson]
-        possible_color_violin = ["rgb(100,149,237)", "rgb(0,139,139)", "rgb(255,140,0)", "rgb(220,20,60)"]
-        read_counts = self.parameters["read_counts"]
-        fig = make_subplots(rows=1, cols=2, subplot_titles=("Normalized Counts",
-                                                            "Soft_Hard Clipped Read Counts"))
-        i = 0
-        j = 0
-        hover_pos = self.norm["bin"] * self.bin_size
-        for col in read_counts:
-            if "cig_filt" in col:
-                fig.add_trace(go.Violin(y=self.norm_clip[col],
-                                        box_visible=True,
-                                        meanline_visible=True,
-                                        hovertext=hover_pos,
-                                        text=self.norm["chr"],
-                                        hovertemplate=
-                                        "<b>Chrom</b>: %{text}" +
-                                        "<br><b>Position</b>: %{hovertext:,}" +
-                                        "<br>Count: %{y:.0f}",
-                                        # fillcolor="rgb(0,139,139)",
-                                        line_color=possible_color_violin[i],
-                                        # name=col[:col.find("_Illumina")]),
-                                        name=col[:col.find("_")]),
-                              row=1,
-                              col=2)
-                fig.update_yaxes(title_text="Norm_Clipped_counts", row=1, col=2)
-                fig.update_xaxes(tickangle=45)
-                i += 1
+    def plot(self, saving_folder, saving_format, cigar, unmapped, ref_genome, fc, pairwise, control_name,
+             chr_name=None, sample=None):
+        visualizer = BinReadVisualizer(self.bin_size, self.parameters["read_counts"], self.norm, self.log_norm,
+                                       self.norm_clip, self.log_norm_clip, self.parameters["unmapped_reads"],
+                                       self.norm_unmapped, self.fold_change, self.clipped_fold_change,
+                                       saving_folder, saving_format)
 
-            elif "cig_filt" not in col and col != "chr" and col != "bin":
-                fig.add_trace(go.Violin(y=self.norm[col],
-                                        box_visible=True,
-                                        meanline_visible=True,
-                                        hovertext=hover_pos,
-                                        text=self.norm["chr"],
-                                        hovertemplate=
-                                        "<b>Chrom</b>: %{text}" +
-                                        "<br><b>Position</b>: %{hovertext:,}" +
-                                        "<br>Count: %{y:.0f}",
-                                        # fillcolor="rgb(255,160,122)",
-                                        line_color=possible_color_violin[j],
-                                        # name=col[:col.find("_Illumina")]),
-                                        name=col[:col.find("_")]),
-                              row=1,
-                              col=1)
-                fig.update_yaxes(title_text="Norm_Read_counts", row=1, col=1)
+        if chr_name and sample:
+            visualizer.plot_chr_sample(chr_name, sample, cigar)
+            # print("\nok9")
+            visualizer.plot_norm_chr_sample(chr_name, sample, cigar)
+            # print("\nok10")
+            visualizer.plot_fold_change_chr_sample(pairwise, fc, chr_name, sample, control_name, cigar)
+            # print("\nok15")
 
-                j += 1
+        elif chr_name and not sample:
+            visualizer.plot_chr(chr_name, cigar)
+            # print("\nok11")
+            visualizer.plot_norm_chr(chr_name, cigar)
+            # print("\nok12")
+            visualizer.plot_fold_change_chr(pairwise, fc, chr_name, control_name, cigar)
+            # print("\nok16")
 
-        fig.update_layout(showlegend=False,
-                          title="Comparison Between Read Counts and Only Clipped Read Counts per Sample" +
-                                "- Bin Size: " + str(self.bin_size))
+        elif sample and not chr_name:
+            visualizer.plot_sample(sample, cigar)
+            # print("\nok13")
+            visualizer.plot_norm_sample(sample, cigar)
+            # print("\nok14")
+            visualizer.plot_fold_change_sample(pairwise, fc, sample, control_name, cigar)
+            # print("\nok17")
 
-        fig.update_traces(opacity=0.75)
-        fig.show()
-
-        save_fig = fig.write_image(saving_folder + "comparison_norm_clipped_reads_counts" + str(self.bin_size) + ".jpeg",
-                                   width=1920,
-                                   height=1080)
-
-    def plot_bar_chart(self, saving_folder, cigar, unmapped):
-        read_counts = self.parameters["read_counts"]
-        summary_read_counts = []
-        summary_clipped_counts = []
-        summary_unmapped_reads = list(self.parameters["unmapped_reads"].values())
-        x_labels = list(self.parameters["unmapped_reads"].keys())
-        perc_read_counts = []
-        total_reads = []
-        fig = go.Figure()
-
-        for col in read_counts:
-            if col != "chr" and col != "bin":
-                if "cig_filt" in col:
-                    summary_clipped_counts.append(sum(read_counts[col]))
-                else:
-                    summary_read_counts.append(sum(read_counts[col]))
-
-        for i in range(len(summary_read_counts)):
-            total_reads.append(summary_read_counts[i] + summary_clipped_counts[i] + summary_unmapped_reads[i])
-            perc_read_counts.append((summary_read_counts[i] / total_reads[i]) * 100)
-
-        fig.add_trace(go.Bar(x=x_labels,
-                             y=perc_read_counts,
-                             text=[str(int(el)) + "%" for el in perc_read_counts],
-                             textposition="auto",
-                             # marker_color="rgb(0, 139, 139)",  # dark cyan
-                             name="%read_counts"))
-        if unmapped:
-            for i in range(len(summary_unmapped_reads)):
-                summary_unmapped_reads[i] = (summary_unmapped_reads[i] / total_reads[i]) * 100
-
-            fig.add_trace(go.Bar(x=x_labels,
-                                 y=summary_unmapped_reads,
-                                 text=[str(int(el)) + "%" for el in summary_unmapped_reads],
-                                 textposition="auto",
-                                 # marker_color="rgb(220,20,60)",  # crimson
-                                 name="%unmapped_reads"))
-
-        if cigar:
-            for i in range(len(summary_clipped_counts)):
-                summary_clipped_counts[i] = (summary_clipped_counts[i] / total_reads[i]) * 100
-
-            fig.add_trace(go.Bar(x=x_labels,
-                                 y=summary_clipped_counts,
-                                 text=[str(int(el)) + "%" for el in summary_clipped_counts],
-                                 textposition="auto",
-                                 marker_color="rgb(220,20,60)",  # crimson
-                                 name="%clipped_reads"))
-
-        fig.update_layout(barmode="stack",
-                          title_text="Proportion of Clipped Reads, Unmapped Reads and other Reads Counts - Bin Size: " +
-                                     str(self.bin_size))
-        fig.update_traces(opacity=0.6)
-        fig.show()
-        save_fig = fig.write_image(saving_folder + "bar_chart_proportion" + str(self.bin_size) + ".jpeg",
-                                   width=1920,
-                                   height=1080)
+        else:
+            visualizer.plot_violin()
+            # print("\nok1")
+            visualizer.plot_bar(cigar, unmapped)
+            # print("\nok2")
+            visualizer.plot_scatter()
+            # print("\nok3")
+            visualizer.plot_norm_scatter()
+            # print("\nok4")
+            visualizer.plot_clipped_scatter()
+            # print("\nok5")
+            visualizer.plot_norm_clipped_scatter()
+            # print("\nok6")
+            # visualizer.fold_change_colors()
+            visualizer.plot_fold_change(fc, pairwise, control_name)
+            # print("\nok7")
+            visualizer.plot_clip_fold_change(fc, pairwise, control_name)
+            # print("\nok8")
 
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(usage="%(prog)s [options]",
-                                     formatter_class=argparse.RawDescriptionHelpFormatter,
+                                     # formatter_class=argparse.RawDescriptionHelpFormatter,
                                      description="",
                                      epilog="")
-
+    # parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("-bs", "--bin_size",
                         type=int,
                         default=250000,
@@ -1806,9 +656,14 @@ if __name__ == "__main__":
 
     parser.add_argument("-sf", "--saving_folder",
                         type=str,
-                        default="./plots/",
+                        default="./",
                         help="""Path to the directory in which create the plots folder and save all images; 
                         if not specified, a directory 'plots' will be created in the current one""")
+
+    parser.add_argument("-fo", "--saving_format",
+                        type=str,
+                        default="svg",
+                        help="""file format for saved plot images""")
 
     parser.add_argument("-pw", "--pairwise",
                         action="store_true",
@@ -1820,9 +675,23 @@ if __name__ == "__main__":
                         help="""If specified, distribution_plot, norm_plot_all, (filtered_plot_all) and 
                         fold_change_plot are displayed""")
 
-    pio.templates.default = "seaborn+none"
-    template = "seaborn+none"
+    parser.add_argument("-bc", "--bin_chromosomes",
+                        nargs="+",
+                        default=[],
+                        type=str,
+                        help="""the name of the chromosome for each interesting bin (no repetitions)""")
 
+    parser.add_argument("-bp", "--bin_positions",
+                        action="append",
+                        default=[],
+                        # type=int,
+                        # dest="list",
+                        help="""The bin position on the corresponding chromosome, be careful that for each position 
+                            there is on and only one chromosome""")
+
+    parser.add_argument("-id", "--identifier",
+                        action="store_true",
+                        help="if identifier class is needed")
 
     args = parser.parse_args()
     dict_args = vars(parser.parse_args([]))
@@ -1832,65 +701,67 @@ if __name__ == "__main__":
     else:
         flags = args.flag_list
 
-    # if args.folder != dict_args["folder"]:
-    #     args.folder = dict_args["folder"] + args.folder
+    if args.folder != dict_args["folder"]:
+        bam_folder = dict_args["folder"] + args.folder
+    else:
+        bam_folder = args.folder
 
-    analyzer = BinReadAnalyzer(args.folder,
-                                      args.bin_size,
-                                      args.reference,
-                                      flags,
-                                      args.cigar_filter,
-                                      args.output_pickle)
-
-    analyzer.load_data(cigar=args.cigar,
-                       cigar_filter=args.cigar_filter,
-                       reference=args.reference,
-                       read_info=args.read_info,
-                       unmapped=args.unmapped,
-                       verbose=True)
-
-    if not os.path.exists(args.saving_folder):
-        os.mkdir(args.saving_folder)
-
-    analyzer.no_repeats_df_transformation()
-    analyzer.normalize_bins(args.control_name)
-    # exit(1)
-    analyzer.calc_fold_change(args.control_name, args.pairwise)
-
-    if args.general_info and args.cigar:
-        print("ok")
-        # analyzer.plot_violin_dist_counts(args.saving_folder)
-        # analyzer.plot_bar_chart(args.saving_folder, args.cigar, args.unmapped)
-        # analyzer.plot_all(args.saving_folder, args.reference, template, args.Ns_count)
-        # analyzer.plot_norm_data_all(args.saving_folder, args.reference, template)
-        # analyzer.plot_filtered_reads(args.saving_folder)
-        # analyzer.plot_fold_change(args.fold_change, args.saving_folder, args.pairwise, args.control_name)
-        # analyzer.plot_filt_reads_fold_change(args.fold_change, args.pairwise, args.control_name, args.saving_folder)
-        # analyzer.sig_positions_output_file(args.fold_change, args.control_name, args.output_pickle)
-
-    elif args.general_info:
-        analyzer.plot_counts_distributions(args.saving_folder)
-        analyzer.plot_bar_chart(args.saving_folder, args.cigar, args.unmapped)
-        analyzer.plot_all(args.saving_folder, args.reference, template, args.Ns_count)
-        analyzer.plot_norm_data_all(args.saving_folder, args.reference, template)
-        analyzer.plot_fold_change(args.fold_change, args.saving_folder, args.pairwise)
+    if args.identifier:
+        if not os.path.exists(args.saving_folder):
+            os.mkdir(args.saving_folder)
+        else:
+            pass
+        # print(args.bin_chromosomes)
+        # print(args.bin_positions)
+        bin_pos = []
+        for el in args.bin_positions:
+            if len(el) > 1:
+                bin_pos.append(el.split(","))
+            else:
+                bin_pos.append(el)
+        # print(bin_pos)
+        bin_dictionary = dict(zip(args.bin_chromosomes, bin_pos))
+        # print(bin_dictionary)
+        ide = BinReadIdentifier(args.bin_size,
+                                flags,
+                                bam_folder,
+                                args.saving_folder,
+                                bin_dictionary,
+                                args.cigar,
+                                args.cigar_filter)
+        # ide.load_bam()
+        ide.get_read_ids()
 
     else:
-        if args.chromosome and args.sample:
-            analyzer.plot_chrom_sample(args.saving_folder, args.reference, args.chromosome,
-                                       args.sample, template, args.Ns_count)
-            analyzer.plot_norm_data_chr_sample(args.saving_folder, args.reference, args.chromosome,
-                                               args.sample, template, args.Ns_count)
-            analyzer.plot_fold_change_chr_sample(args.pairwise, args.fold_change, args.chromosome,
-                                                 args.sample, args.control_name, args.saving_folder)
 
-        elif args.chromosome:
-            analyzer.plot_chromosome(args.saving_folder, args.reference, args.chromosome, template, args.Ns_count)
-            analyzer.plot_norm_data_chr(args.saving_folder, args.reference, args.chromosome, template, args.Ns_count)
-            analyzer.plot_fold_change_chr(args.pairwise, args.fold_change, args.chromosome, args.saving_folder)
+        analyzer = BinReadAnalyzer(bam_folder,
+                                   args.bin_size,
+                                   args.reference,
+                                   flags,
+                                   args.cigar_filter,
+                                   args.output_pickle)
 
+        analyzer.load_data(cigar=args.cigar,
+                           cigar_filter=args.cigar_filter,
+                           reference=args.reference,
+                           read_info=args.read_info,
+                           unmapped=args.unmapped,
+                           verbose=True)
+
+        plots_folder = args.saving_folder
+        if not os.path.exists(plots_folder):
+            os.mkdir(plots_folder)
         else:
-            analyzer.plot_sample(args.saving_folder, args.reference, args.sample, template, args.Ns_count)
-            analyzer.plot_norm_data_sample(args.saving_folder, args.reference, args.sample, template, args.Ns_count)
-            analyzer.plot_fold_change_sample(args.pairwise, args.fold_change, args.sample,
-                                             args.control_name, args.saving_folder)
+            pass
+
+        analyzer.no_repeats_df_transformation(args.saving_folder)
+
+        analyzer.normalize_bins(args.control_name)
+        analyzer.calc_fold_change(args.control_name, args.pairwise)
+        analyzer.summary_sig_bins(args.fold_change)
+
+        analyzer.output_sig_positions(args.fold_change, args.control_name, args.output_pickle)
+        # exit(1)
+        analyzer.plot(plots_folder, args.saving_format, args.cigar,
+                      args.unmapped, args.reference, args.fold_change, args.pairwise, args.control_name,
+                      chr_name=args.chromosome, sample=args.sample)

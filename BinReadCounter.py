@@ -466,7 +466,7 @@ class BinReadCounter:
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(usage="%(prog)s [options]",
-                                     formatter_class=argparse.RawDescriptionHelpFormatter,
+                                     # formatter_class=argparse.RawDescriptionHelpFormatter,
                                      description="",
                                      epilog="")
 
@@ -499,10 +499,10 @@ if __name__ == "__main__":
                         help="""The path to the reference file; if specified a data structures containing counts of 
                         N bases in the genome, for each bin, is built-up""")
 
-    parser.add_argument("-i", "--read_info",
-                        action="store_true",
-                        help="""If specified, a data-frame with information on the read ID, and if the read 
-                        and its mate map in the same bin in the same chromosome, is created""")
+    # parser.add_argument("-i", "--read_info",
+    #                     action="store_true",
+    #                     help="""If specified, a data-frame with information on the read ID, and if the read
+    #                     and its mate map in the same bin in the same chromosome, is created""")
 
     parser.add_argument("-c", "--cigar",
                         action="store_true",
