@@ -765,3 +765,4 @@ if __name__ == "__main__":
         analyzer.plot(plots_folder, args.saving_format, args.cigar,
                       args.unmapped, args.reference, args.fold_change, args.pairwise, args.control_name,
                       chr_name=args.chromosome, sample=args.sample)
+    # final version 16/06/2020
