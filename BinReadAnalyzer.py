@@ -55,7 +55,8 @@ class BinReadAnalyzer:
     Attributes:
             bam_folder_path: path to the folder in which the .bam files are
                             stored
-            bin_size: bin length in which each chromosome is divided (in bp)
+            bin_size: bin length in which each chromosome is divided
+                      (in bp)
             flags: a list of string, each corresponding to a particular
                    pairwise-flag in the .bam/.sam format
             ref_genome: a string being the name of the reference_genome file
@@ -64,6 +65,16 @@ class BinReadAnalyzer:
             out_pickle: default is None because it takes the name of an
                         already existing file or the name of a new file
                         created during the computation
+            parameters: all the parameters of the already existed/new pickle
+                        file
+            norm: data structure build up by the normalization function
+                  of the class
+            log_norm: log2 applied to normalized counts
+            norm_clip: normalized clipped read counts
+            log_norm_clip: log2 applied to normalized clipped counts
+            norm_unmapped:
+            fold_change:
+            clipped_fold_change:
       """
 
     def __init__(self, bam_folder_path, bin_size, ref_genome, flags, cigar_filter, out_pickle):
@@ -74,7 +85,6 @@ class BinReadAnalyzer:
         self.cigar_filter = cigar_filter
         self.out = out_pickle
         self.parameters = None
-        self.read_counts = None
         self.norm = None
         self.log_norm = None
         self.norm_clip = None
@@ -83,14 +93,16 @@ class BinReadAnalyzer:
         self.fold_change = None
         self.clipped_fold_change = None
         self.sig_bins = None
+        # self.no_sig_bins = None
         self.sig_clip_bins = None
+        # self.no_sig_clip_bins = None
 
     def set_parameters(self, param):
         """set parameters as actual parameters"""
         self.parameters = param
 
-    def set_read_counts(self, read_counts_data):
-        self.read_counts = read_counts_data
+    def set_read_counts(self, sort_read_counts):
+        self.parameters["read_counts"] = sort_read_counts
 
     def set_norm(self, norm):
         """set norm counts from normalization function"""
@@ -124,9 +136,15 @@ class BinReadAnalyzer:
         """set the data structure of significant read fold-change counts"""
         self.sig_bins = sig_data
 
+    # def set_no_sig_bins(self, no_sig_data):
+    #     self.no_sig_bins = pd.concat([no_sig_data])
+
     def set_sig_clip_bins(self, sig_clip_data):
         """set the data structure of significant clipped fold-change counts"""
         self.sig_clip_bins = sig_clip_data
+
+    # def set_no_sig_clip_bins(self, no_sig_clip_data):
+    #     self.no_sig_clip_bins = pd.concat([no_sig_clip_data])
 
     def load_data(self, cigar, cigar_filter=None, reference=None, read_info=None, unmapped=None,
                   verbose=False):
@@ -155,6 +173,7 @@ class BinReadAnalyzer:
         counter = BinReadCounter(self.folder, self.bin_size, self.flags, self.ref, self.cigar_filter, self.out)
         found = None
         bam_files = []
+        i = 0
         list_pick_dir = os.listdir(self.out)
         for f in self.folder:
             list_bam_dir = os.listdir(f)
@@ -176,6 +195,7 @@ class BinReadAnalyzer:
                         parameters["unmapped"] == unmapped and \
                         parameters["ref"] == counter.get_ref_name() and \
                         parameters["info"] == read_info:
+                    print(parameters)
                     found = True
                     if verbose:
                         print("Same parameters; import from: ", file)
@@ -184,9 +204,7 @@ class BinReadAnalyzer:
                         counter._load_read_ID(cigar)
 
                     self.set_parameters(parameters)
-                    print(self.parameters)
-                    self.set_read_counts(self.parameters["read_counts"])
-                    return self.read_counts
+                    return self.parameters
 
                 else:
                     continue
@@ -211,8 +229,7 @@ class BinReadAnalyzer:
 
             self.set_parameters(parameters)
             print(self.parameters)
-            self.set_read_counts(self.parameters["read_counts"])
-            return self.read_counts
+            return self.parameters
 
     def sorted_chromosomes(self, column):
         convert = lambda text: int(text) if text.isdigit() else text
@@ -220,19 +237,20 @@ class BinReadAnalyzer:
         return sorted(column, key=alphanum_key)
 
     def no_repeats_df_transformation(self, saving_folder):
+        read_counts = self.parameters["read_counts"]
         # print(read_counts)
-        chr_list = list(self.read_counts["chr"].value_counts().index)
+        chr_list = list(read_counts["chr"].value_counts().index)
         sorted_chr_list = self.sorted_chromosomes(chr_list)
 
         sorted_df = pd.DataFrame()
         for chrom in sorted_chr_list:
-            single_df = self.read_counts[self.read_counts["chr"] == chrom]
+            single_df = read_counts[read_counts["chr"] == chrom]
             sorted_df = pd.concat([sorted_df, single_df])
         sorted_df = sorted_df.reset_index(drop=True)
         self.set_read_counts(sorted_df)
         # print("sorted_read_counts: \n", self.parameters["read_counts"])
         sorted_df.to_csv(saving_folder + "sorted_df.txt", sep="\t")
-        return self.read_counts
+        return self.parameters["read_counts"]
 
     def normalize_bins(self, control_name):
         """This method handles the normalization of the raw read_counts
@@ -241,7 +259,9 @@ class BinReadAnalyzer:
         table of counts, as well as a series of other function specifically
         implemented for RNA-Seq; the normalization for clipped counts is done
         manually"""
-
+        read_counts = self.parameters["read_counts"]
+        read_counts.to_csv(str(self.bin_size) + "_norm_counts_check.txt", sep="\t")
+        # read_counts = self.no_repeats_df_transformation()
         # the edgeR package is imported using rpy2 syntax to access to all its built-in functions
         read_counts_edger = {}  # a dictionary of sample: vector_of_counts to work with edger
         clipped_count = {}
@@ -252,17 +272,17 @@ class BinReadAnalyzer:
         norm_bar = progressbar.ProgressBar(max_value=progressbar.UnknownLength)
         update_bar = 0
 
-        for col in self.read_counts:
+        for col in read_counts:
             if col != "chr" and col != 'bin' and "cig_filt" not in col:
                 # print(list(read_counts[col]))
                 # creates an element of the dictionary [sample_name]: r_vector_of_counts
-                read_counts_edger[col] = robjects.IntVector(self.read_counts[col])
+                read_counts_edger[col] = robjects.IntVector(read_counts[col])
 
-                # print(self.read_counts_edger[col])
+                # print(read_counts_edger[col])
 
             elif "cig_filt" in col:
-                # print(list(self.read_counts[col]))
-                clipped_count[col] = self.read_counts[col]
+                # print(list(read_counts[col]))
+                clipped_count[col] = read_counts[col]
             update_bar += 1
             norm_bar.update(update_bar)
 
@@ -278,12 +298,12 @@ class BinReadAnalyzer:
             log_norm_counts_dict[log_norm_counts.colnames[i - 1]] = list(log_norm_counts.rx(True, i))
 
         norm_counts_df = pd.DataFrame(norm_counts_dict)
-        norm_counts_df = pd.concat([self.read_counts["chr"], self.read_counts['bin'], norm_counts_df], axis=1)
+        norm_counts_df = pd.concat([read_counts["chr"], read_counts['bin'], norm_counts_df], axis=1)
 
-        # print(self.read_counts[["chr", "bin"]])
+        # print(read_counts[["chr", "bin"]])
         # print(norm_counts_df)
         log_norm_counts_df = pd.DataFrame(log_norm_counts_dict)
-        log_norm_counts_df = pd.concat([self.read_counts["chr"], self.read_counts['bin'], log_norm_counts_df], axis=1)
+        log_norm_counts_df = pd.concat([read_counts["chr"], read_counts['bin'], log_norm_counts_df], axis=1)
 
         self.set_norm(norm_counts_df)
         self.set_log_norm(log_norm_counts_df)
@@ -295,7 +315,7 @@ class BinReadAnalyzer:
 
         for col in clipped_count_df:
             read_counts_col = col[:col.find("_cig_filt")]
-            norm_clip[col] = clipped_count_df[col] / (sum(self.read_counts[read_counts_col]) / 1000000)
+            norm_clip[col] = clipped_count_df[col] / (sum(read_counts[read_counts_col]) / 1000000)
             log_norm_clip[col] = []
             for row in clipped_count_df[col]:
                 if row == 0:
@@ -306,9 +326,9 @@ class BinReadAnalyzer:
             norm_bar.update(update_bar)
 
         norm_clip_df = pd.DataFrame(norm_clip)
-        norm_clip_df = pd.concat([self.read_counts["chr"], self.read_counts["bin"], norm_clip_df], axis=1)
+        norm_clip_df = pd.concat([read_counts["chr"], read_counts["bin"], norm_clip_df], axis=1)
         log_norm_clip_df = pd.DataFrame(log_norm_clip)
-        log_norm_clip_df = pd.concat([self.read_counts["chr"], self.read_counts['bin'], log_norm_clip_df], axis=1)
+        log_norm_clip_df = pd.concat([read_counts["chr"], read_counts['bin'], log_norm_clip_df], axis=1)
 
         self.set_norm_clip(norm_clip_df)
         self.set_log_norm_clip(log_norm_clip_df)
@@ -316,7 +336,7 @@ class BinReadAnalyzer:
         unmapped = self.parameters["unmapped_reads"]
         norm_unmapped = {}
         for el in unmapped:
-            norm_unmapped[el] = unmapped[el] / (sum(self.read_counts[el]) / 1000000)
+            norm_unmapped[el] = unmapped[el] / (sum(read_counts[el]) / 1000000)
             update_bar += 1
             norm_bar.update(update_bar)
 
