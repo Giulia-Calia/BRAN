@@ -14,6 +14,9 @@ import math
 import progressbar
 import re
 import plotly.graph_objects as go
+# Disable the orca response timeout.
+import plotly.io._orca
+import retrying
 import pandas as pd
 import rpy2.robjects as robjects
 import rpy2.robjects.packages as rpackages
@@ -28,6 +31,10 @@ from rpy2.robjects import pandas2ri
 # plotly.io.orca.ensure_server()
 # time.sleep(10)
 
+unwrapped = plotly.io._orca.request_image_with_retrying.__wrapped__
+wrapped = retrying.retry(wait_random_min=1000)(unwrapped)
+plotly.io._orca.request_image_with_retrying = wrapped
+
 pandas2ri.activate()
 base = importr('base')
 utils = importr('utils')
@@ -40,22 +47,34 @@ edger = rpackages.importr('edgeR')
 # --------------------------
 
 
+def sorted_chromosomes(column):
+    """Sort a given list of string having numbers on it"""
+    # convert a number of type string into a number of type int in order to sort it
+    convert = lambda text: int(text) if text.isdigit() else text
+    # regular expression used to retrieve chromosome number of type string and pass them to the converter
+    alphanum_key = lambda key: [convert(c) for c in re.split('([0-9]+)', key)]  # any n. having digits from 0 to 9
+    # as result a sorted list of chromosomes is returned applying the lambda functions above
+    return sorted(column, key=alphanum_key)
+
+
 class BinReadAnalyzer:
     """This class provides different analysis of the data coming form
-    BinReadCounter class, their visualization through the calling of
-    BinReadVisualizer and finally, if required by the user, read IDs
-    information.
+    BinReadCounter class; here imported.
 
     Options:
     -   normalize read_counts calculation
     -   fold-change calculation
-    -   plot the data distribution (raw and normalized), the percentage
-        of unmapped and mapped reads and the fold-change distribution
+    -   plot read_counts for all chromosomes, for a specific one or for
+        a specific sample
+    -   plot normalized_read_counts for all chromosomes, for a specific
+        one or for a specific sample
+    -   plot fold-change for all chromosomes, for a specific one or for
+        a specific sample, taking in account the pairwise (-pw) parameter
 
     Attributes:
-            bam_folder_path: path to the folder in which the .bam files are
-                            stored
-            bin_size: bin length in which each chromosome is divided
+            folder_path: path to the folder in which the .bam files are
+                         stored
+            bin_size: bins' length in which each chromosome is divided
                       (in bp)
             flags: a list of string, each corresponding to a particular
                    pairwise-flag in the .bam/.sam format
@@ -65,17 +84,7 @@ class BinReadAnalyzer:
             out_pickle: default is None because it takes the name of an
                         already existing file or the name of a new file
                         created during the computation
-            parameters: all the parameters of the already existed/new pickle
-                        file
-            norm: data structure build up by the normalization function
-                  of the class
-            log_norm: log2 applied to normalized counts
-            norm_clip: normalized clipped read counts
-            log_norm_clip: log2 applied to normalized clipped counts
-            norm_unmapped:
-            fold_change:
-            clipped_fold_change:
-      """
+    """
 
     def __init__(self, bam_folder_path, bin_size, ref_genome, flags, cigar_filter, out_pickle):
         self.folder = bam_folder_path
@@ -85,6 +94,7 @@ class BinReadAnalyzer:
         self.cigar_filter = cigar_filter
         self.out = out_pickle
         self.parameters = None
+        self.read_counts = None
         self.norm = None
         self.log_norm = None
         self.norm_clip = None
@@ -102,7 +112,7 @@ class BinReadAnalyzer:
         self.parameters = param
 
     def set_read_counts(self, sort_read_counts):
-        self.parameters["read_counts"] = sort_read_counts
+        self.read_counts = sort_read_counts
 
     def set_norm(self, norm):
         """set norm counts from normalization function"""
@@ -195,10 +205,10 @@ class BinReadAnalyzer:
                         parameters["unmapped"] == unmapped and \
                         parameters["ref"] == counter.get_ref_name() and \
                         parameters["info"] == read_info:
-                    print(parameters)
                     found = True
                     if verbose:
                         print("Same parameters; import from: ", file)
+                        print("\n", parameters)
 
                     if parameters["info"]:
                         counter._load_read_ID(cigar)
@@ -231,26 +241,23 @@ class BinReadAnalyzer:
             print(self.parameters)
             return self.parameters
 
-    def sorted_chromosomes(self, column):
-        convert = lambda text: int(text) if text.isdigit() else text
-        alphanum_key = lambda key: [convert(c) for c in re.split('([0-9]+)', key)]
-        return sorted(column, key=alphanum_key)
-
-    def no_repeats_df_transformation(self, saving_folder):
+    def sorted_df(self, saving_folder):
+        """Return a sorted data-frame on a chromosome order base"""
         read_counts = self.parameters["read_counts"]
-        # print(read_counts)
         chr_list = list(read_counts["chr"].value_counts().index)
-        sorted_chr_list = self.sorted_chromosomes(chr_list)
-
+        # use the lambda functions below to retrieve a sorted list of chromosomes from 1 to whatever
+        sorted_chr_list = sorted_chromosomes(chr_list)
         sorted_df = pd.DataFrame()
+        # to rebuilt the data-frame in a sorted order of chromosomes have to iterate and concatenate a single chromosome
+        # df at a time
         for chrom in sorted_chr_list:
             single_df = read_counts[read_counts["chr"] == chrom]
             sorted_df = pd.concat([sorted_df, single_df])
         sorted_df = sorted_df.reset_index(drop=True)
         self.set_read_counts(sorted_df)
         # print("sorted_read_counts: \n", self.parameters["read_counts"])
-        sorted_df.to_csv(saving_folder + "sorted_df.txt", sep="\t")
-        return self.parameters["read_counts"]
+        # sorted_df.to_csv(saving_folder + "sorted_df.txt", sep="\t")
+        return self.read_counts
 
     def normalize_bins(self, control_name):
         """This method handles the normalization of the raw read_counts
@@ -259,8 +266,7 @@ class BinReadAnalyzer:
         table of counts, as well as a series of other function specifically
         implemented for RNA-Seq; the normalization for clipped counts is done
         manually"""
-        read_counts = self.parameters["read_counts"]
-        read_counts.to_csv(str(self.bin_size) + "_norm_counts_check.txt", sep="\t")
+        # self.read_counts.to_csv(str(self.bin_size) + "_norm_counts_check.txt", sep="\t")
         # read_counts = self.no_repeats_df_transformation()
         # the edgeR package is imported using rpy2 syntax to access to all its built-in functions
         read_counts_edger = {}  # a dictionary of sample: vector_of_counts to work with edger
@@ -272,23 +278,25 @@ class BinReadAnalyzer:
         norm_bar = progressbar.ProgressBar(max_value=progressbar.UnknownLength)
         update_bar = 0
 
-        for col in read_counts:
-            if col != "chr" and col != 'bin' and "cig_filt" not in col:
-                # print(list(read_counts[col]))
+        for col in self.read_counts:
+            if col != "chr" and col != "bin" and "cig_filt" not in col:
                 # creates an element of the dictionary [sample_name]: r_vector_of_counts
-                read_counts_edger[col] = robjects.IntVector(read_counts[col])
-
+                read_counts_edger[col] = robjects.IntVector(self.read_counts[col])
                 # print(read_counts_edger[col])
 
             elif "cig_filt" in col:
                 # print(list(read_counts[col]))
-                clipped_count[col] = read_counts[col]
+                clipped_count[col] = self.read_counts[col]
+
+            else:
+                continue
+
             update_bar += 1
             norm_bar.update(update_bar)
 
-        read_counts_edger_df = robjects.DataFrame(read_counts_edger)  # R data frame
-        norm_counts = edger.cpm(read_counts_edger_df, normalized_lib_sizes=True)
-        log_norm_counts = edger.cpm(read_counts_edger_df, log=True)
+        read_counts_edger_df = robjects.DataFrame(read_counts_edger)  # R data frame of raw counts
+        norm_counts = edger.cpm(read_counts_edger_df, normalized_lib_sizes=True)  # R object of norm counts
+        log_norm_counts = edger.cpm(read_counts_edger_df, log=True)  # R object of log norm counts
 
         norm_counts_dict = {}
         log_norm_counts_dict = {}
@@ -298,24 +306,25 @@ class BinReadAnalyzer:
             log_norm_counts_dict[log_norm_counts.colnames[i - 1]] = list(log_norm_counts.rx(True, i))
 
         norm_counts_df = pd.DataFrame(norm_counts_dict)
-        norm_counts_df = pd.concat([read_counts["chr"], read_counts['bin'], norm_counts_df], axis=1)
+        # pandas data frame of normalized counts
+        norm_counts_df = pd.concat([self.read_counts["chr"], self.read_counts['bin'], norm_counts_df], axis=1)
 
-        # print(read_counts[["chr", "bin"]])
-        # print(norm_counts_df)
         log_norm_counts_df = pd.DataFrame(log_norm_counts_dict)
-        log_norm_counts_df = pd.concat([read_counts["chr"], read_counts['bin'], log_norm_counts_df], axis=1)
+        # pandas data frame of log normalized counts (to be used in fold change calc)
+        log_norm_counts_df = pd.concat([self.read_counts["chr"], self.read_counts['bin'], log_norm_counts_df], axis=1)
 
         self.set_norm(norm_counts_df)
         self.set_log_norm(log_norm_counts_df)
         # print(self.norm)
 
-        clipped_count_df = pd.DataFrame(clipped_count)
+        clipped_count_df = pd.DataFrame(clipped_count)  # clipped_count filled before
         norm_clip = {}
         log_norm_clip = {}
 
         for col in clipped_count_df:
+            # for normalization scope (dividing by the sum(counts) of sample of interest)
             read_counts_col = col[:col.find("_cig_filt")]
-            norm_clip[col] = clipped_count_df[col] / (sum(read_counts[read_counts_col]) / 1000000)
+            norm_clip[col] = clipped_count_df[col] / (sum(self.read_counts[read_counts_col]) / 1000000)
             log_norm_clip[col] = []
             for row in clipped_count_df[col]:
                 if row == 0:
@@ -326,17 +335,17 @@ class BinReadAnalyzer:
             norm_bar.update(update_bar)
 
         norm_clip_df = pd.DataFrame(norm_clip)
-        norm_clip_df = pd.concat([read_counts["chr"], read_counts["bin"], norm_clip_df], axis=1)
+        norm_clip_df = pd.concat([self.read_counts["chr"], self.read_counts["bin"], norm_clip_df], axis=1)
         log_norm_clip_df = pd.DataFrame(log_norm_clip)
-        log_norm_clip_df = pd.concat([read_counts["chr"], read_counts['bin'], log_norm_clip_df], axis=1)
+        log_norm_clip_df = pd.concat([self.read_counts["chr"], self.read_counts['bin'], log_norm_clip_df], axis=1)
 
         self.set_norm_clip(norm_clip_df)
         self.set_log_norm_clip(log_norm_clip_df)
 
         unmapped = self.parameters["unmapped_reads"]
         norm_unmapped = {}
-        for el in unmapped:
-            norm_unmapped[el] = unmapped[el] / (sum(read_counts[el]) / 1000000)
+        for u in unmapped:
+            norm_unmapped[u] = unmapped[u] / (sum(self.read_counts[u]) / 1000000)
             update_bar += 1
             norm_bar.update(update_bar)
 
@@ -734,15 +743,12 @@ if __name__ == "__main__":
         else:
             pass
 
-        analyzer.no_repeats_df_transformation(args.saving_folder)
-
+        analyzer.sorted_df(args.saving_folder)
         analyzer.normalize_bins(args.control_name)
         analyzer.calc_fold_change(args.control_name, args.pairwise)
         analyzer.summary_sig_bins(args.fold_change)
-
         analyzer.output_sig_positions(args.fold_change, args.control_name, args.output_pickle)
-        # exit(1)
         analyzer.plot(plots_folder, args.saving_format, args.cigar,
                       args.unmapped, args.reference, args.fold_change, args.pairwise, args.control_name,
                       chr_name=args.chromosome, sample=args.sample)
-    # final version 16/06/2020
+    # version 18/06/2020
