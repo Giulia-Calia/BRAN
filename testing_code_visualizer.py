@@ -276,16 +276,23 @@ class TestingBinReadVisualizer:
 
         self.saving_plot(fig, description="bar_chart_" + str(self.bin_size))
 
+    def scatter_traces(self, fig, x_coord, y_coord, hover_text, trace_name):
+        fig.add_trace(go.Scatter(x=x_coord,  # itw it begins from 0 any t.
+                                 y=y_coord,
+                                 hovertext=hover_text,
+                                 text=self.read_counts["chr"],
+                                 hovertemplate=
+                                 "<b>%{text}</b>" +
+                                 "<br>Chrom_position</b>: %{hovertext:,}" +
+                                 "<br>Count: %{y}",
+                                 mode="markers",
+                                 name=trace_name))
+
     def scatter_layout(self, fig, title):
         fig.update_layout(title=title,
                           template=self.color_palette(),
                           legend_orientation="h",
                           legend=dict(x=-0.01, y=1.05))
-
-    def fold_change_layout(self, fig, title):
-        fig.update_layout(title=title,
-                          template=self.color_palette(fc_colors=True),
-                          legend_orientation="h")
 
     def plot_scatter(self, ref_genome=False, ns=False, fig=go.Figure()):
         """This method allows to obtain a scatter-plot of raw_read_counts
@@ -309,14 +316,11 @@ class TestingBinReadVisualizer:
 
         for i in range(len(col_list)):
             if col_list[i] != "chr" and col_list[i] != "bin" and "cig_filt" not in col_list[i]:
-                fig.add_trace(go.Scatter(x=list(self.read_counts.index * self.bin_size),  # otw it begins from 0 any t.
-                                         y=self.read_counts[col_list[i]],
-                                         hovertext=hover_pos,
-                                         hovertemplate=
-                                         "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                         mode="markers",
-                                         # name=str(col_list[i][:col_list[i].find("_Illumina")])))
-                                         name=str(col_list[i])))
+                self.scatter_traces(fig,
+                                    list(self.read_counts.index * self.bin_size),  # otw it begins from 0 any t.
+                                    self.read_counts[col_list[i]],
+                                    hover_pos,
+                                    str(col_list[i]))
 
                 self.scatter_layout(fig, title="Raw_Read Counts - All Clones - All Chromosomes - Bin Size: " +
                                                str(self.bin_size))
@@ -351,14 +355,11 @@ class TestingBinReadVisualizer:
         hover_pos = self.norm_counts["bin"] * self.bin_size
         for col in self.norm_counts:
             if col != "chr" and col != "bin":
-                fig.add_trace(go.Scatter(x=list(self.norm_counts.index * self.bin_size),
-                                         y=self.norm_counts[col],
-                                         hovertext=hover_pos,
-                                         hovertemplate=
-                                         "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y:.0f}",
-                                         mode="markers",
-                                         # name=col[:col.find("_Illumina")]))
-                                         name=col))
+                self.scatter_traces(fig,
+                                    list(self.norm_counts.index * self.bin_size),
+                                    self.norm_counts[col],
+                                    hover_pos,
+                                    col)
 
                 self.scatter_layout(fig, title="Normalized Read Counts - Clone: all - Chr: all - Bin Size: " +
                                                str(self.bin_size))
@@ -379,14 +380,11 @@ class TestingBinReadVisualizer:
         for col in self.read_counts:
             if "cig_filt" in col:
                 hover_pos = self.read_counts["bin"] * self.bin_size
-                fig.add_trace(go.Scatter(x=list(self.read_counts[col].index * self.bin_size),
-                                         y=self.read_counts[col],
-                                         hovertext=hover_pos,
-                                         hovertemplate=
-                                         "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                         hoverinfo="text",
-                                         mode="markers",
-                                         name=col))
+                self.scatter_traces(fig,
+                                    list(self.read_counts[col].index * self.bin_size),
+                                    self.read_counts[col],
+                                    hover_pos,
+                                    col)
 
                 self.scatter_layout(fig, title="Raw_Clipped Read Counts - All Clones - All Chromosomes - Bin Size: " +
                                                str(self.bin_size))
@@ -404,14 +402,11 @@ class TestingBinReadVisualizer:
         for col in self.read_counts:
             if "cig_filt" in col:
                 hover_pos = self.read_counts["bin"] * self.bin_size
-                fig.add_trace(go.Scatter(x=list(self.norm_clip_counts[col].index * self.bin_size),
-                                         y=self.norm_clip_counts[col],
-                                         hovertext=hover_pos,
-                                         hovertemplate=
-                                         "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                         hoverinfo="text",
-                                         mode="markers",
-                                         name=col))
+                self.scatter_traces(fig,
+                                    list(self.norm_clip_counts[col].index * self.bin_size),
+                                    self.norm_clip_counts[col],
+                                    hover_pos,
+                                    col)
 
                 self.scatter_layout(fig, title="Normalized Clipped Read Counts - All Clones - "
                                                "All Chromosomes - Bin Size: " +
@@ -444,13 +439,11 @@ class TestingBinReadVisualizer:
 
         counts_chr = self.read_counts[self.read_counts["chr"].str.contains(chr_name) == True]
         hover_pos = counts_chr["bin"] * self.bin_size
-        fig.add_trace(go.Scatter(x=hover_pos,
-                                 y=counts_chr[sample],
-                                 hovertext=hover_pos,
-                                 hovertemplate=
-                                 "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                 mode="markers",
-                                 name=sample))
+        self.scatter_traces(fig,
+                            hover_pos,
+                            counts_chr[sample],
+                            hover_pos,
+                            sample)
 
         self.scatter_layout(fig, title="Read Counts - Bin Size: {} <br> Clone: {} <br> Chr: {}".format(
             str(self.bin_size),
@@ -468,13 +461,11 @@ class TestingBinReadVisualizer:
             fig2.update_xaxes(title_text="Chromosomes_Position")
             fig2.update_yaxes(title_text="Read_Clipped_Count_Per_Bin")
 
-            fig2.add_trace(go.Scatter(x=hover_pos,
-                                      y=counts_chr[sample + "_cig_filt"],
-                                      hovertext=hover_pos,
-                                      hovertemplate=
-                                      "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                      mode="markers",
-                                      name=sample + "clipped"))
+            self.scatter_traces(fig2,
+                                hover_pos,
+                                counts_chr[sample + "_cig_filt"],
+                                hover_pos,
+                                sample + "clipped")
 
             self.scatter_layout(fig2, title="Clipped Read Counts - Bin Size: {} <br> Clone: {} <br> Chr: {}".format(
                 str(self.bin_size),
@@ -510,13 +501,11 @@ class TestingBinReadVisualizer:
         norm_counts_chr = self.norm_counts[self.norm_counts["chr"].str.contains(chr_name)]
         hover_pos = norm_counts_chr["bin"] * self.bin_size
 
-        fig.add_trace(go.Scatter(x=hover_pos,  # list(single_chrom.index * self.bin_size),
-                                 y=norm_counts_chr[sample],
-                                 hovertext=hover_pos,
-                                 hovertemplate=
-                                 "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y:.0f}",
-                                 mode="markers",
-                                 name=sample))
+        self.scatter_traces(fig,
+                            hover_pos,  # list(single_chrom.index * self.bin_size),
+                            norm_counts_chr[sample],
+                            hover_pos,
+                            sample)
 
         # if ns:
         #     self.add_ns_trace(fig, reference=reference, chrom=chrom)
@@ -539,13 +528,11 @@ class TestingBinReadVisualizer:
             norm_clipped_counts_chr = self.norm_clip_counts[self.norm_clip_counts["chr"].str.contains(chr_name)]
             hover_pos = norm_clipped_counts_chr["bin"] * self.bin_size
 
-            fig2.add_trace(go.Scatter(x=hover_pos,
-                                      y=norm_clipped_counts_chr[sample + "_cig_filt"],
-                                      hovertext=hover_pos,
-                                      hovertemplate=
-                                      "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                      mode="markers",
-                                      name=sample + "clipped"))
+            self.scatter_traces(fig2,
+                                hover_pos,
+                                norm_clipped_counts_chr[sample + "_cig_filt"],
+                                hover_pos,
+                                sample + "clipped")
 
             self.scatter_layout(fig2, title="Normalized Clipped Read Counts - Bin Size: {} "
                                             "<br> Clone: {} "
@@ -580,13 +567,11 @@ class TestingBinReadVisualizer:
         hover_pos = counts_chr["bin"] * self.bin_size
         for col in counts_chr:
             if col != "chr" and col != "bin" and "cig_filt" not in col:
-                fig.add_trace(go.Scatter(x=hover_pos,  # list(single_chrom.index * self.bin_size),
-                                         y=counts_chr[col],
-                                         hovertext=hover_pos,
-                                         hovertemplate=
-                                         "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                         mode="markers",
-                                         name=col))
+                self.scatter_traces(fig,
+                                    hover_pos,  # list(single_chrom.index * self.bin_size),
+                                    counts_chr[col],
+                                    hover_pos,
+                                    col)
         # if ns:
         #     self.add_ns_trace(fig, reference=reference, chrom=chrom)
 
@@ -606,13 +591,11 @@ class TestingBinReadVisualizer:
 
             for col in counts_chr:
                 if col != "chr" and col != "bin" and "cig_filt" in col:
-                    fig2.add_trace(go.Scatter(x=hover_pos,
-                                              y=counts_chr[col],
-                                              hovertext=hover_pos,
-                                              hovertemplate=
-                                              "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                              mode="markers",
-                                              name=col))
+                    self.scatter_traces(fig2,
+                                        hover_pos,
+                                        counts_chr[col],
+                                        hover_pos,
+                                        col)
 
             self.scatter_layout(fig2, title="Clipped Read Counts - Bin Size: {} "
                                             "<br> Chr: {}".format(str(self.bin_size),
@@ -644,13 +627,11 @@ class TestingBinReadVisualizer:
         hover_pos = counts_chr["bin"] * self.bin_size
         for col in counts_chr:
             if col != "chr" and col != "bin":
-                fig.add_trace(go.Scatter(x=hover_pos,  # list(single_chrom.index * self.bin_size),
-                                         y=counts_chr[col],
-                                         hovertext=hover_pos,
-                                         hovertemplate=
-                                         "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y:.0f}",
-                                         mode="markers",
-                                         name=col))
+                self.scatter_traces(fig,
+                                    hover_pos,  # list(single_chrom.index * self.bin_size),
+                                    counts_chr[col],
+                                    hover_pos,
+                                    col)
 
         # if ns:
         #     self.add_ns_trace(fig, reference=reference, chrom=chrom)
@@ -670,13 +651,11 @@ class TestingBinReadVisualizer:
             clip_counts_chr = self.norm_clip_counts[self.norm_clip_counts["chr"].str.contains(chr_name) == True]
             for col in clip_counts_chr:
                 if col != "chr" and col != "bin":
-                    fig2.add_trace(go.Scatter(x=hover_pos,  # list(single_chrom.index * self.bin_size),
-                                              y=clip_counts_chr[col],
-                                              hovertext=hover_pos,
-                                              hovertemplate=
-                                              "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y:.0f}",
-                                              mode="markers",
-                                              name=col))
+                    self.scatter_traces(fig2,
+                                        hover_pos,  # list(single_chrom.index * self.bin_size),
+                                        clip_counts_chr[col],
+                                        hover_pos,
+                                        col)
 
             self.scatter_layout(fig2, title="Normalized Clipped Read Counts - Bin Size: {}"
                                             "<br> Chr: {}".format(str(self.bin_size), chr_name))
@@ -705,13 +684,11 @@ class TestingBinReadVisualizer:
 
         hover_pos = self.read_counts["bin"] * self.bin_size
 
-        fig.add_trace(go.Scatter(x=list(self.read_counts.index * self.bin_size),  # otw it begins from 0 for any chr
-                                 y=self.read_counts[sample],
-                                 hovertext=hover_pos,  # useful to know the bin pos within the chromosome
-                                 hovertemplate=
-                                 "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                 mode="markers",
-                                 name=sample))
+        self.scatter_traces(fig,
+                            list(self.read_counts.index * self.bin_size),  # otw it begins from 0 for any chr
+                            self.read_counts[sample],
+                            hover_pos,  # useful to know the bin pos within the chromosome
+                            sample)
 
         # if ns:
         #     self.add_ns_trace(fig, reference=reference)
@@ -733,13 +710,11 @@ class TestingBinReadVisualizer:
 
             hover_pos = self.read_counts["bin"] * self.bin_size
 
-            fig2.add_trace(go.Scatter(x=list(self.read_counts.index * self.bin_size),
-                                      y=self.read_counts[sample + "_cig_filt"],
-                                      hovertext=hover_pos,  # useful to know the bin pos within the chromosome
-                                      hovertemplate=
-                                      "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
-                                      mode="markers",
-                                      name=sample + "_cig_filt"))
+            self.scatter_traces(fig2,
+                                list(self.read_counts.index * self.bin_size),
+                                self.read_counts[sample + "_cig_filt"],
+                                hover_pos,  # useful to know the bin pos within the chromosome
+                                sample + "_cig_filt")
 
             # if ns:
             #     self.add_ns_trace(fig2, reference=reference)
@@ -774,13 +749,11 @@ class TestingBinReadVisualizer:
 
         hover_pos = self.norm_counts["bin"] * self.bin_size
 
-        fig.add_trace(go.Scatter(x=list(self.norm_counts.index * self.bin_size),
-                                 y=self.norm_counts[sample],
-                                 hovertext=hover_pos,
-                                 hovertemplate=
-                                 "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y:.0f}",
-                                 mode="markers",
-                                 name=sample))
+        self.scatter_traces(fig,
+                            list(self.norm_counts.index * self.bin_size),
+                            self.norm_counts[sample],
+                            hover_pos,
+                            sample)
 
         # if ns:
         #     self.add_ns_trace(fig, reference=reference)
@@ -801,13 +774,11 @@ class TestingBinReadVisualizer:
 
             hover_pos = self.norm_clip_counts["bin"] * self.bin_size
 
-            fig2.add_trace(go.Scatter(x=list(self.norm_clip_counts.index * self.bin_size),
-                                      y=self.norm_clip_counts[sample + "_cig_filt"],
-                                      hovertext=hover_pos,
-                                      hovertemplate=
-                                      "<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y:.0f}",
-                                      mode="markers",
-                                      name=sample + "_cig_filt"))
+            self.scatter_traces(fig2,
+                                list(self.norm_clip_counts.index * self.bin_size),
+                                self.norm_clip_counts[sample + "_cig_filt"],
+                                hover_pos,
+                                sample + "_cig_filt")
 
             # if ns:
             #     self.add_ns_trace(fig2, reference=reference)
@@ -830,23 +801,28 @@ class TestingBinReadVisualizer:
     #     return fc_palette_array
 
     def fold_change_traces(self, pairwise, fig, x_sig, y_sig,
-                           x_no_sig, y_no_sig,  marker_dict, hover_sig, hover_no_sig, trace_name):
+                           x_no_sig, y_no_sig, hover_sig, hover_no_sig, text_sig, text_no_sig, trace_name):
 
         if pairwise:
             fig.add_trace(go.Scatter(x=x_sig,
                                      y=y_sig,
                                      mode="markers",
                                      hovertext=hover_sig,
-                                     hovertemplate="<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
+                                     text=text_sig,
+                                     hovertemplate="<b>%{text}</b>" +
+                                                   "<br>Chrom_position</b>: %{hovertext:,}" +
+                                                   "<br>Count: %{y}",
                                      name=trace_name))
 
             fig.add_trace(go.Scatter(x=x_no_sig,
                                      y=y_no_sig,
                                      mode="markers",
                                      opacity=0.1,
-                                     # marker=marker_dict,
                                      hovertext=hover_no_sig,
-                                     hovertemplate="<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
+                                     text=text_no_sig,
+                                     hovertemplate="<b>%{text}</b>" +
+                                                   "<br>Chrom_position</b>: %{hovertext:,}" +
+                                                   "<br>Count: %{y}",
                                      name=trace_name + "_<b>not_significant</b>"))
 
         else:
@@ -854,17 +830,27 @@ class TestingBinReadVisualizer:
                                      y=y_sig,
                                      mode="markers",
                                      hovertext=hover_sig,
-                                     hovertemplate="<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
+                                     text=text_sig,
+                                     hovertemplate="<b>%{text}</b>" +
+                                                   "<br>Chrom_position</b>: %{hovertext:,}" +
+                                                   "<br>Count: %{y}",
                                      name="Significant Differences"))
 
             fig.add_trace(go.Scatter(x=x_no_sig,
                                      y=y_no_sig,
                                      mode="markers",
                                      opacity=0.1,
-                                     # marker=marker_dict,
                                      hovertext=hover_no_sig,
-                                     hovertemplate="<b>Chrom_position</b>: %{hovertext:,}" + "<br>Count: %{y}",
+                                     text=text_no_sig,
+                                     hovertemplate="<b>%{text}</b>" +
+                                                   "<br>Chrom_position</b>: %{hovertext:,}" +
+                                                   "<br>Count: %{y}",
                                      name="Not Significant Differences"))
+
+    def fold_change_layout(self, fig, title):
+        fig.update_layout(title=title,
+                          template=self.color_palette(fc_colors=True),
+                          legend_orientation="h")
 
     def plot_fold_change(self, fc, pairwise, control_name):
         """"""
@@ -886,11 +872,10 @@ class TestingBinReadVisualizer:
 
                 x_axis_sig = list(sig_bins.index * self.bin_size)
                 x_axis_no_sig = list(no_sig_bins.index * self.bin_size)
-                marker_color = dict(size=5, color="rgb(176, 196, 222)")
 
-                self.fold_change_traces(pairwise, fig, x_sig=x_axis_sig, y_sig=sig_bins[col], x_no_sig=x_axis_no_sig,
-                                        y_no_sig=no_sig_bins[col], marker_dict=marker_color, hover_sig=hover_pos_sig,
-                                        hover_no_sig=hover_pos_no_sig, trace_name=col[:col.find("-")])
+                self.fold_change_traces(pairwise, fig, x_axis_sig, sig_bins[col], x_axis_no_sig, no_sig_bins[col],
+                                        hover_pos_sig, hover_pos_no_sig, sig_bins["chr"], no_sig_bins["chr"],
+                                        col[:col.find("-")])
                 if pairwise:
                     self.fold_change_layout(fig,
                                             title="Each <i>vs</i> {}<br>Pairwise log2 Fold Change - Bin Size: {} - "
@@ -911,7 +896,7 @@ class TestingBinReadVisualizer:
         self.add_threshold_fc(fig, fc, len(self.fold_change))
         self.plot_background(fig)
 
-        # fig.show()
+        fig.show()
 
         self.saving_plot(fig, description=description)
 
@@ -935,12 +920,10 @@ class TestingBinReadVisualizer:
                 hover_pos_no_sig = no_sig_clip_bins["bin"] * self.bin_size
                 x_axis_sig = list(sig_clip_bins.index * self.bin_size)
                 x_axis_no_sig = list(no_sig_clip_bins.index * self.bin_size)
-                marker_color = dict(size=5, color="rgb(176, 196, 222)")
 
-                self.fold_change_traces(pairwise, fig, x_sig=x_axis_sig, y_sig=sig_clip_bins[col],
-                                        x_no_sig=x_axis_no_sig, y_no_sig=no_sig_clip_bins[col], marker_dict=marker_color,
-                                        hover_sig=hover_pos_sig, hover_no_sig=hover_pos_no_sig,
-                                        trace_name=col[:col.find("-")])
+                self.fold_change_traces(pairwise, fig, x_axis_sig, sig_clip_bins[col], x_axis_no_sig,
+                                        no_sig_clip_bins[col], hover_pos_sig, hover_pos_no_sig, sig_clip_bins["chr"],
+                                        no_sig_clip_bins["chr"], col[:col.find("-")])
 
                 if pairwise:
                     self.fold_change_layout(fig,
@@ -984,12 +967,9 @@ class TestingBinReadVisualizer:
 
             hover_pos_sig = sig_bins["bin"] * self.bin_size  # no needs for the list because only one chr
             hover_pos_no_sig = not_sig_bins["bin"] * self.bin_size
-            marker_color = dict(size=5, color="rgb(176, 196, 222)")
 
-            self.fold_change_traces(pairwise, fig, x_sig=hover_pos_sig, y_sig=sig_bins[sample_pw],
-                                    x_no_sig=hover_pos_no_sig, y_no_sig=not_sig_bins[sample_pw],
-                                    marker_dict=marker_color, hover_sig=hover_pos_sig,
-                                    hover_no_sig=hover_pos_no_sig, trace_name=sample)
+            self.fold_change_traces(pairwise, fig, hover_pos_sig, sig_bins[sample_pw], hover_pos_no_sig,
+                                    not_sig_bins[sample_pw], hover_pos_sig, hover_pos_no_sig, chr_name, chr_name, sample)
 
             self.fold_change_layout(fig,
                                     title="Pairwise Fold Change {} <i>vs</i> {}"
@@ -1023,12 +1003,10 @@ class TestingBinReadVisualizer:
 
                 hover_pos_sig = sig_bins["bin"] * self.bin_size
                 hover_pos_no_sig = not_sig_bins["bin"] * self.bin_size
-                marker_color = dict(size=5, color="rgb(176, 196, 222)")
 
-                self.fold_change_traces(pairwise, fig2, x_sig=hover_pos_sig, y_sig=sig_bins[sample_clip],
-                                        x_no_sig=hover_pos_no_sig, y_no_sig=not_sig_bins[sample_clip],
-                                        marker_dict=marker_color, hover_sig=hover_pos_sig, hover_no_sig=hover_pos_no_sig,
-                                        trace_name=sample + "_cig_filt")
+                self.fold_change_traces(pairwise, fig2, hover_pos_sig, sig_bins[sample_clip], hover_pos_no_sig,
+                                        not_sig_bins[sample_clip], hover_pos_sig, hover_pos_no_sig, chr_name, chr_name,
+                                        sample + "_cig_filt")
 
                 self.fold_change_layout(fig2,
                                         title="{} <i>vs</i> {} - Chr: {} "
@@ -1073,12 +1051,9 @@ class TestingBinReadVisualizer:
 
                 hover_pos_sig = sig_bins["bin"] * self.bin_size  # no need for the list because is only one chr
                 hover_pos_no_sig = not_sig_bins["bin"] * self.bin_size
-                marker_color = dict(size=5, color="rgb(176, 196, 222)")
 
-                self.fold_change_traces(pairwise, fig, x_sig=hover_pos_sig, y_sig=sig_bins[col],
-                                        x_no_sig=hover_pos_no_sig, y_no_sig=not_sig_bins[col], marker_dict=marker_color,
-                                        hover_sig=hover_pos_sig, hover_no_sig=hover_pos_no_sig,
-                                        trace_name=col[:col.find("-")])
+                self.fold_change_traces(pairwise, fig, hover_pos_sig, sig_bins[col], hover_pos_no_sig, not_sig_bins[col],
+                                        hover_pos_sig, hover_pos_no_sig, chr_name, chr_name, col[:col.find("-")])
 
         if cigar:
             for col in clip_fc_chr:
@@ -1090,13 +1065,10 @@ class TestingBinReadVisualizer:
 
                     hover_pos_sig = sig_bins["bin"] * self.bin_size
                     hover_pos_no_sig = not_sig_bins["bin"] * self.bin_size
-                    marker_color = dict(size=5, color="rgb(176, 196, 222)")
 
-                    self.fold_change_traces(pairwise, fig2, x_sig=hover_pos_sig, y_sig=sig_bins[col],
-                                            x_no_sig=hover_pos_no_sig, y_no_sig=not_sig_bins[col],
-                                            marker_dict=marker_color,
-                                            hover_sig=hover_pos_sig, hover_no_sig=hover_pos_no_sig,
-                                            trace_name=col[:col.find("-")])
+                    self.fold_change_traces(pairwise, fig2, hover_pos_sig, sig_bins[col], hover_pos_no_sig,
+                                            not_sig_bins[col], hover_pos_sig, hover_pos_no_sig, chr_name, chr_name,
+                                            col[:col.find("-")])
 
         self.add_threshold_fc(fig, fc, len_x_axis=len(fc_chr))
         self.add_threshold_fc(fig2, fc, len_x_axis=len(clip_fc_chr))
@@ -1165,12 +1137,9 @@ class TestingBinReadVisualizer:
             hover_pos_no_sig = not_sig_bins["bin"] * self.bin_size
             x_axis_sig = list(sig_bins.index * self.bin_size)
             x_axis_no_sig = list(not_sig_bins.index * self.bin_size)
-            marker_color = dict(size=5, color="rgb(176, 196, 222)")
 
-            self.fold_change_traces(pairwise, fig, x_sig=x_axis_sig, y_sig=sig_bins[col],
-                                    x_no_sig=x_axis_no_sig, y_no_sig=not_sig_bins[col], marker_dict=marker_color,
-                                    hover_sig=hover_pos_sig, hover_no_sig=hover_pos_no_sig,
-                                    trace_name=sample)
+            self.fold_change_traces(pairwise, fig, x_axis_sig, sig_bins[col], x_axis_no_sig, not_sig_bins[col],
+                                    hover_pos_sig, hover_pos_no_sig, sig_bins["chr"], not_sig_bins["chr"], sample)
 
             self.fold_change_layout(fig, title="Pairwise Fold Change - All Chromosomes - Bin Size: {} "
                                                "- Threshold_fc: {} <br> {} <i>vs</i> {}".format(str(self.bin_size),
@@ -1181,7 +1150,7 @@ class TestingBinReadVisualizer:
             self.add_threshold_fc(fig, fc, len_x_axis=len(self.fold_change[col]))
             self.plot_background(fig)
 
-            # fig.show()
+            fig.show()
 
             self.saving_plot(fig, description="pw_fc_{}_{}".format(sample, str(self.bin_size)))
 
@@ -1204,12 +1173,10 @@ class TestingBinReadVisualizer:
                 hover_pos_no_sig = not_sig_bins["bin"] * self.bin_size
                 x_axis_sig = list(sig_bins.index * self.bin_size)
                 x_axis_no_sig = list(not_sig_bins.index * self.bin_size)
-                marker_color = dict(size=5, color="rgb(176, 196, 222)")
 
-                self.fold_change_traces(pairwise, fig2, x_sig=x_axis_sig, y_sig=sig_bins[sample_clip],
-                                        x_no_sig=x_axis_no_sig, y_no_sig=not_sig_bins[sample_clip],
-                                        marker_dict=marker_color, hover_sig=hover_pos_sig, hover_no_sig=hover_pos_no_sig,
-                                        trace_name=sample + "_cig_filt")
+                self.fold_change_traces(pairwise, fig2, x_axis_sig, sig_bins[sample_clip], x_axis_no_sig,
+                                        not_sig_bins[sample_clip], hover_pos_sig, hover_pos_no_sig, sig_bins["chr"],
+                                        not_sig_bins["chr"], sample + "_cig_filt")
 
                 self.fold_change_layout(fig2,
                                         title="{} <i>vs</i> {}"

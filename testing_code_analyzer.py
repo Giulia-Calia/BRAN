@@ -530,7 +530,7 @@ class TestingBinReadAnalyzer:
 
     def plot(self, saving_folder, saving_format, cigar, unmapped, ref_genome, fc, pairwise, control_name,
              chr_name=None, sample=None):
-        visualizer = TestingBinReadVisualizer(self.bin_size, self.parameters["read_counts"], self.norm, self.log_norm,
+        visualizer = TestingBinReadVisualizer(self.bin_size, self.read_counts, self.norm, self.log_norm,
                                               self.norm_clip, self.log_norm_clip, self.parameters["unmapped_reads"],
                                               self.norm_unmapped, self.fold_change, self.clipped_fold_change,
                                               saving_folder, saving_format)
