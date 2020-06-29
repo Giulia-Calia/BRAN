@@ -882,18 +882,18 @@ class BinReadVisualizer:
                 if pairwise:
                     self.fold_change_layout(fig,
                                             title="Each <i>vs</i> {}<br>Pairwise log2 Fold Change - Bin Size: {} - "
-                                                  "Threshold_FC: ".format(control_name,
-                                                                          str(self.bin_size),
-                                                                          str(fc)))
+                                                  "Threshold_FC: {}".format(control_name,
+                                                                            str(self.bin_size),
+                                                                            str(fc)))
 
                     description = "pw_fold_change_" + str(self.bin_size)
 
                 else:
 
                     self.fold_change_layout(fig, title="All Mean <i>vs</i> {}<br>log2 Fold Change - Bin Size: {} - "
-                                                       "Threshold_FC: ".format(control_name,
-                                                                               str(self.bin_size),
-                                                                               str(fc)))
+                                                       "Threshold_FC: {}".format(control_name,
+                                                                                 str(self.bin_size),
+                                                                                 str(fc)))
                     description = "fold_change_" + str(self.bin_size)
 
         self.add_threshold_fc(fig, fc, len(self.fold_change))
