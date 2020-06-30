@@ -42,7 +42,8 @@ class BinReadIdentifier:
         return self.bam
 
     def get_read_ids(self):
-        header = "{}\nID \t str_pos \t\t end_pos".format(self.bins)
+        header = "#  {} bin_size: {}" \
+                 "\nID \t\t\t str_pos \t end_pos \t chr \t chr_bin_pos".format(self.bins, self.bin_size)
         for file in self.load_bam():
             bam_file = pysam.AlignmentFile(file, "rb")
             reads_bar = progressbar.ProgressBar(max_value=progressbar.UnknownLength)
@@ -67,7 +68,7 @@ class BinReadIdentifier:
                 # print(len(self.bins[ch]))
                 for bin_p in range(len(self.bins[ch])):
                     # print(type(self.bins[ch][bin_p]))
-                    #     print(pos)
+                    # print(pos)
                     for read in bam_file.fetch(contig=ref_names):
                         update_bar += 1
                         reads_bar.update(update_bar)
@@ -79,7 +80,9 @@ class BinReadIdentifier:
                                 start_p <= int(read.reference_start) < end_p:
                             ids.write(read.query_name + " \t " +
                                       str(read.reference_start) + " \t\t " +
-                                      str(int(read.reference_start) + len(read.query_sequence) - 1) + "\n")
+                                      str(int(read.reference_start) + len(read.query_sequence) - 1) + "\t" +
+                                      ref_names + "\t" +
+                                      self.bins[ch][bin_p] + "\n")
 
                         elif str(read.flag) in self.flags and \
                                 not self.cigar and \
@@ -91,7 +94,7 @@ class BinReadIdentifier:
 
                         elif read.is_unmapped:
                             # print(read)
-                            ids.write(read.query_name + " \t - \t\t - \n")
+                            ids.write(read.query_name + " \t - \t\t - \t\t - \t\t -\n")
 
                         else:
                             continue
