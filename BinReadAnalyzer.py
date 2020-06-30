@@ -510,161 +510,160 @@ class BinReadAnalyzer:
 
         print(sig_df)
 
-        def plot(self, saving_folder, saving_format, cigar, unmapped, ref_genome, fc, pairwise, control_name,
-                 violin_bar,
-                 scatter, fold_change_pl, chr_name=None, sample=None):
-            visualizer = TestingBinReadVisualizer(self.bin_size, self.read_counts, self.norm, self.log_norm,
-                                                  self.norm_clip, self.log_norm_clip, self.parameters["unmapped_reads"],
-                                                  self.norm_unmapped, self.fold_change, self.clipped_fold_change,
-                                                  saving_folder, saving_format)
+    def plot(self, saving_folder, saving_format, cigar, unmapped, ref_genome, fc, pairwise, control_name, violin_bar,
+             scatter, fold_change_pl, chr_name=None, sample=None):
+        visualizer = BinReadVisualizer(self.bin_size, self.read_counts, self.norm, self.log_norm,
+                                       self.norm_clip, self.log_norm_clip, self.parameters["unmapped_reads"],
+                                       self.norm_unmapped, self.fold_change, self.clipped_fold_change,
+                                       saving_folder, saving_format)
 
-            if chr_name and sample:
-                if violin_bar:
-                    print("Sorry but for violin distribution and bar plot the entire set of sample is necessary, "
-                          "\nPlease retry without the '-vb' parameter")
-                elif scatter and not fold_change_pl:
-                    visualizer.plot_chr_sample(chr_name, sample, cigar)
-                    # print("\nok9")
-                    visualizer.plot_norm_chr_sample(chr_name, sample, cigar)
-                    # print("\nok10")
-                elif fold_change_pl and not scatter:
-                    visualizer.plot_fold_change_chr_sample(pairwise, fc, chr_name, sample, control_name, cigar)
-                    # print("\nok15")
-                else:
-                    visualizer.plot_chr_sample(chr_name, sample, cigar)
-                    # print("\nok9")
-                    visualizer.plot_norm_chr_sample(chr_name, sample, cigar)
-                    # print("\nok10")
-                    visualizer.plot_fold_change_chr_sample(pairwise, fc, chr_name, sample, control_name, cigar)
-                    # print("\nok15")
-
-            elif chr_name and not sample:
-                if violin_bar:
-                    print("Sorry but for violin distribution and bar plot the entire set of sample is necessary, "
-                          "\nPlease retry without the '-vb' parameter")
-                elif scatter and not fold_change_pl:
-                    visualizer.plot_chr(chr_name, cigar)
-                    # print("\nok11")
-                    visualizer.plot_norm_chr(chr_name, cigar)
-                    # print("\nok12")
-                elif fold_change_pl and not scatter:
-                    visualizer.plot_fold_change_chr(pairwise, fc, chr_name, control_name, cigar)
-                    # print("\nok16")
-                else:
-                    visualizer.plot_chr(chr_name, cigar)
-                    # print("\nok11")
-                    visualizer.plot_norm_chr(chr_name, cigar)
-                    # print("\nok12")
-                    visualizer.plot_fold_change_chr(pairwise, fc, chr_name, control_name, cigar)
-                    # print("\nok16")
-
-            elif sample and not chr_name:
-                if violin_bar:
-                    print("Sorry but for violin distribution and bar plot the entire set of sample is necessary, "
-                          "\nPlease retry without the '-vb' parameter")
-                elif scatter and not fold_change_pl:
-                    visualizer.plot_sample(sample, cigar)
-                    # print("\nok13")
-                    visualizer.plot_norm_sample(sample, cigar)
-                    # print("\nok14")
-                elif fold_change_pl and not scatter:
-                    visualizer.plot_fold_change_sample(pairwise, fc, sample, control_name, cigar)
-                    # print("\nok17")
-                else:
-                    visualizer.plot_sample(sample, cigar)
-                    # print("\nok13")
-                    visualizer.plot_norm_sample(sample, cigar)
-                    # print("\nok14")
-                    visualizer.plot_fold_change_sample(pairwise, fc, sample, control_name, cigar)
-                    # print("\nok17")
-
+        if chr_name and sample:
+            if violin_bar:
+                print("Sorry but for violin distribution and bar plot the entire set of sample is necessary, "
+                      "\nPlease retry without the '-vb' parameter")
+            elif scatter and not fold_change_pl:
+                visualizer.plot_chr_sample(chr_name, sample, cigar)
+                # print("\nok9")
+                visualizer.plot_norm_chr_sample(chr_name, sample, cigar)
+                # print("\nok10")
+            elif fold_change_pl and not scatter:
+                visualizer.plot_fold_change_chr_sample(pairwise, fc, chr_name, sample, control_name, cigar)
+                # print("\nok15")
             else:
-                if violin_bar and not scatter and not fold_change_pl:
-                    visualizer.plot_violin()
-                    # print("\nok1")
-                    visualizer.plot_bar(cigar, unmapped)
-                    # print("\nok2")
-                elif violin_bar and scatter and not fold_change_pl:
-                    visualizer.plot_violin()
-                    # print("\nok1")
-                    visualizer.plot_bar(cigar, unmapped)
-                    # print("\nok2")
-                    visualizer.plot_scatter()
-                    # print("\nok3")
-                    visualizer.plot_norm_scatter()
-                    # print("\nok4")
-                    visualizer.plot_clipped_scatter()
-                    # print("\nok5")
-                    visualizer.plot_norm_clipped_scatter()
-                    # print("\nok6")
-                elif violin_bar and fold_change_pl and not scatter:
-                    visualizer.plot_violin()
-                    # print("\nok1")
-                    visualizer.plot_bar(cigar, unmapped)
-                    # print("\nok2")
-                    # visualizer.fold_change_colors()
-                    visualizer.plot_fold_change(fc, pairwise, control_name)
-                    # print("\nok7")
-                    visualizer.plot_clip_fold_change(fc, pairwise, control_name)
-                    # print("\nok8")
+                visualizer.plot_chr_sample(chr_name, sample, cigar)
+                # print("\nok9")
+                visualizer.plot_norm_chr_sample(chr_name, sample, cigar)
+                # print("\nok10")
+                visualizer.plot_fold_change_chr_sample(pairwise, fc, chr_name, sample, control_name, cigar)
+                # print("\nok15")
 
-                elif fold_change_pl and not violin_bar and not scatter:
-                    # visualizer.fold_change_colors()
-                    visualizer.plot_fold_change(fc, pairwise, control_name)
-                    # print("\nok7")
-                    visualizer.plot_clip_fold_change(fc, pairwise, control_name)
-                    # print("\nok8")
-                elif fold_change_pl and scatter and not violin_bar:
-                    visualizer.plot_scatter()
-                    # print("\nok3")
-                    visualizer.plot_norm_scatter()
-                    # print("\nok4")
-                    visualizer.plot_clipped_scatter()
-                    # print("\nok5")
-                    visualizer.plot_norm_clipped_scatter()
-                    # print("\nok6")
-                    # visualizer.fold_change_colors()
-                    visualizer.plot_fold_change(fc, pairwise, control_name)
-                    # print("\nok7")
-                    visualizer.plot_clip_fold_change(fc, pairwise, control_name)
-                    # print("\nok8")
-                elif fold_change_pl and violin_bar and not scatter:
-                    visualizer.plot_violin()
-                    # print("\nok1")
-                    visualizer.plot_bar(cigar, unmapped)
-                    # print("\nok2")
-                    # visualizer.fold_change_colors()
-                    visualizer.plot_fold_change(fc, pairwise, control_name)
-                    # print("\nok7")
-                    visualizer.plot_clip_fold_change(fc, pairwise, control_name)
-                    # print("\nok8")
-                elif scatter and not fold_change_pl and not violin_bar:
-                    visualizer.plot_scatter()
-                    # print("\nok3")
-                    visualizer.plot_norm_scatter()
-                    # print("\nok4")
-                    visualizer.plot_clipped_scatter()
-                    # print("\nok5")
-                    visualizer.plot_norm_clipped_scatter()
-                    # print("\nok6")
-                else:
-                    visualizer.plot_violin()
-                    # print("\nok1")
-                    visualizer.plot_bar(cigar, unmapped)
-                    # print("\nok2")
-                    visualizer.plot_scatter()
-                    # print("\nok3")
-                    visualizer.plot_norm_scatter()
-                    # print("\nok4")
-                    visualizer.plot_clipped_scatter()
-                    # print("\nok5")
-                    visualizer.plot_norm_clipped_scatter()
-                    # print("\nok6")
-                    # visualizer.fold_change_colors()
-                    visualizer.plot_fold_change(fc, pairwise, control_name)
-                    # print("\nok7")
-                    visualizer.plot_clip_fold_change(fc, pairwise, control_name)
-                    # print("\nok8")
+        elif chr_name and not sample:
+            if violin_bar:
+                print("Sorry but for violin distribution and bar plot the entire set of sample is necessary, "
+                      "\nPlease retry without the '-vb' parameter")
+            elif scatter and not fold_change_pl:
+                visualizer.plot_chr(chr_name, cigar)
+                # print("\nok11")
+                visualizer.plot_norm_chr(chr_name, cigar)
+                # print("\nok12")
+            elif fold_change_pl and not scatter:
+                visualizer.plot_fold_change_chr(pairwise, fc, chr_name, control_name, cigar)
+                # print("\nok16")
+            else:
+                visualizer.plot_chr(chr_name, cigar)
+                # print("\nok11")
+                visualizer.plot_norm_chr(chr_name, cigar)
+                # print("\nok12")
+                visualizer.plot_fold_change_chr(pairwise, fc, chr_name, control_name, cigar)
+                # print("\nok16")
+
+        elif sample and not chr_name:
+            if violin_bar:
+                print("Sorry but for violin distribution and bar plot the entire set of sample is necessary, "
+                      "\nPlease retry without the '-vb' parameter")
+            elif scatter and not fold_change_pl:
+                visualizer.plot_sample(sample, cigar)
+                # print("\nok13")
+                visualizer.plot_norm_sample(sample, cigar)
+                # print("\nok14")
+            elif fold_change_pl and not scatter:
+                visualizer.plot_fold_change_sample(pairwise, fc, sample, control_name, cigar)
+                # print("\nok17")
+            else:
+                visualizer.plot_sample(sample, cigar)
+                # print("\nok13")
+                visualizer.plot_norm_sample(sample, cigar)
+                # print("\nok14")
+                visualizer.plot_fold_change_sample(pairwise, fc, sample, control_name, cigar)
+                # print("\nok17")
+
+        else:
+            if violin_bar and not scatter and not fold_change_pl:
+                visualizer.plot_violin()
+                # print("\nok1")
+                visualizer.plot_bar(cigar, unmapped)
+                # print("\nok2")
+            elif violin_bar and scatter and not fold_change_pl:
+                visualizer.plot_violin()
+                # print("\nok1")
+                visualizer.plot_bar(cigar, unmapped)
+                # print("\nok2")
+                visualizer.plot_scatter()
+                # print("\nok3")
+                visualizer.plot_norm_scatter()
+                # print("\nok4")
+                visualizer.plot_clipped_scatter()
+                # print("\nok5")
+                visualizer.plot_norm_clipped_scatter()
+                # print("\nok6")
+            elif violin_bar and fold_change_pl and not scatter:
+                visualizer.plot_violin()
+                # print("\nok1")
+                visualizer.plot_bar(cigar, unmapped)
+                # print("\nok2")
+                # visualizer.fold_change_colors()
+                visualizer.plot_fold_change(fc, pairwise, control_name)
+                # print("\nok7")
+                visualizer.plot_clip_fold_change(fc, pairwise, control_name)
+                # print("\nok8")
+
+            elif fold_change_pl and not violin_bar and not scatter:
+                # visualizer.fold_change_colors()
+                visualizer.plot_fold_change(fc, pairwise, control_name)
+                # print("\nok7")
+                visualizer.plot_clip_fold_change(fc, pairwise, control_name)
+                # print("\nok8")
+            elif fold_change_pl and scatter and not violin_bar:
+                visualizer.plot_scatter()
+                # print("\nok3")
+                visualizer.plot_norm_scatter()
+                # print("\nok4")
+                visualizer.plot_clipped_scatter()
+                # print("\nok5")
+                visualizer.plot_norm_clipped_scatter()
+                # print("\nok6")
+                # visualizer.fold_change_colors()
+                visualizer.plot_fold_change(fc, pairwise, control_name)
+                # print("\nok7")
+                visualizer.plot_clip_fold_change(fc, pairwise, control_name)
+                # print("\nok8")
+            elif fold_change_pl and violin_bar and not scatter:
+                visualizer.plot_violin()
+                # print("\nok1")
+                visualizer.plot_bar(cigar, unmapped)
+                # print("\nok2")
+                # visualizer.fold_change_colors()
+                visualizer.plot_fold_change(fc, pairwise, control_name)
+                # print("\nok7")
+                visualizer.plot_clip_fold_change(fc, pairwise, control_name)
+                # print("\nok8")
+            elif scatter and not fold_change_pl and not violin_bar:
+                visualizer.plot_scatter()
+                # print("\nok3")
+                visualizer.plot_norm_scatter()
+                # print("\nok4")
+                visualizer.plot_clipped_scatter()
+                # print("\nok5")
+                visualizer.plot_norm_clipped_scatter()
+                # print("\nok6")
+            else:
+                visualizer.plot_violin()
+                # print("\nok1")
+                visualizer.plot_bar(cigar, unmapped)
+                # print("\nok2")
+                visualizer.plot_scatter()
+                # print("\nok3")
+                visualizer.plot_norm_scatter()
+                # print("\nok4")
+                visualizer.plot_clipped_scatter()
+                # print("\nok5")
+                visualizer.plot_norm_clipped_scatter()
+                # print("\nok6")
+                # visualizer.fold_change_colors()
+                visualizer.plot_fold_change(fc, pairwise, control_name)
+                # print("\nok7")
+                visualizer.plot_clip_fold_change(fc, pairwise, control_name)
+                # print("\nok8")
 
     if __name__ == "__main__":
 
