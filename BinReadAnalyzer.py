@@ -385,6 +385,7 @@ class BinReadAnalyzer:
             return self.fold_change, self.clipped_fold_change
 
         else:
+            # mean count/bin of clones - control count/bin
             print("\nOne vs All Fold Change calculation:\n")
             fc_bar = progressbar.ProgressBar(max_value=progressbar.UnknownLength)
             fc_update_bar = 0
@@ -665,215 +666,223 @@ class BinReadAnalyzer:
                 visualizer.plot_clip_fold_change(fc, pairwise, control_name)
                 # print("\nok8")
 
-    if __name__ == "__main__":
 
-        parser = argparse.ArgumentParser(usage="%(prog)s [options]",
-                                         # formatter_class=argparse.RawDescriptionHelpFormatter,
-                                         description="",  # before the argument help
-                                         epilog="")  # after the argument help
-        # parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
-        parser.add_argument("-bs", "--bin_size",
-                            type=int,
-                            default=250000,
-                            help="The length in bp, of the segments that split the chromosomes equally")
+if __name__ == "__main__":
 
-        parser.add_argument("-fl", "--flag_list",
-                            nargs="+",
-                            default=["99", "147", "163", "83"],
-                            help="""A list of the bitwise-flags in BAM/SAM format that identify the reads to be counted 
+    parser = argparse.ArgumentParser(usage="%(prog)s [options]",
+                                     # formatter_class=argparse.RawDescriptionHelpFormatter,
+                                     description="",  # before the argument help
+                                     epilog="")  # after the argument help
+    # parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("-bs", "--bin_size",
+                        type=int,
+                        default=250000,
+                        help="The length in bp, of the segments that split the chromosomes equally")
+
+    parser.add_argument("-fl", "--flag_list",
+                        nargs="+",
+                        default=["99", "147", "163", "83"],
+                        help="""A list of the bitwise-flags in BAM/SAM format that identify the reads to be counted 
                             during analyses; if different flags wants to be added, add them as strings 
                             (e.g. "177" "129")""")
 
-        parser.add_argument("-fc", "--fold_change",
-                            type=float,
-                            default=1.5,
-                            help="An number to set as fold-change cut-off for bins significance")
+    parser.add_argument("-fc", "--fold_change",
+                        type=float,
+                        default=1.5,
+                        help="An number to set as fold-change cut-off for bins significance")
 
-        parser.add_argument("-co", "--control_name",
-                            type=str,
-                            # required=True,
-                            help="""The name of the control sample(s) for the fold_change analysis, it should be the same 
+    parser.add_argument("-co", "--control_name",
+                        type=str,
+                        # required=True,
+                        help="""The name of the control sample(s) for the fold_change analysis, it should be the same 
                             name as the column name in the read_counts data structure, so the name of the alignment 
                             file used as a baseline, without the '.bam'""")
 
-        parser.add_argument("-pw", "--pairwise",
-                            action="store_true",
-                            help="""If specified, the fold change is calculated pairwise between 
+    parser.add_argument("-pw", "--pairwise",
+                        action="store_true",
+                        help="""If specified, the fold change is calculated pairwise between 
                             each sample and the control_sample""")
 
-        parser.add_argument("-c", "--cigar",
-                            action="store_true",
-                            help="If specified, it allows the application of filters on cigar_string, per read")
+    parser.add_argument("-c", "--cigar",
+                        action="store_true",
+                        help="If specified, it allows the application of filters on cigar_string, per read")
 
-        parser.add_argument("-cf", "--cigar_filter",
-                            nargs="+",
-                            default=["S", "H"],
-                            help="""If specified, the reads mapped with soft and hard clipping (S and H) by default, 
+    parser.add_argument("-cf", "--cigar_filter",
+                        nargs="+",
+                        default=["S", "H"],
+                        help="""If specified, the reads mapped with soft and hard clipping (S and H) by default, 
                                 are taken out form the read counts; it returns a data frame with same structure of the 
                                 default one but with 2 different columns for sample, one without counting the reads having
                                 these filters and the other counting only the reads having these filters.
                                 \n(Specify other filters using e.g. "I" "D")""")
 
-        parser.add_argument("-u", "--unmapped",
-                            action="store_true",
-                            help="""If specified, also a .txt file is  created, with all the unmapped reads and, as 
+    parser.add_argument("-u", "--unmapped",
+                        action="store_true",
+                        help="""If specified, also a .txt file is  created, with all the unmapped reads and, as 
                             last raw, the counts for each sample""")
 
-        parser.add_argument("-ch", "--chromosome",
-                            default=None,
-                            type=str,
-                            help="""The number of the chromosome of interest to obtain a restricted view of the data""")
+    parser.add_argument("-ch", "--chromosome",
+                        default=None,
+                        type=str,
+                        help="""The number of the chromosome of interest to obtain a restricted view of the data""")
 
-        parser.add_argument("-s", "--sample",
-                            default=None,
-                            type=str,
-                            help="""The name of the clone of interest to obtain a restricted view of the data""")
+    parser.add_argument("-s", "--sample",
+                        default=None,
+                        type=str,
+                        help="""The name of the clone of interest to obtain a restricted view of the data""")
 
-        parser.add_argument("-bc", "--bin_chromosomes",
-                            nargs="+",
-                            default=[],
-                            type=str,
-                            help="""The name of the chromosome for each interesting bin (no repetitions) from which retrieve
+    parser.add_argument("-bc", "--bin_chromosomes",
+                        nargs="+",
+                        default=[],
+                        type=str,
+                        help="""The name of the chromosome for each interesting bin (no repetitions) from which retrieve
                                  IDs information""")
 
-        parser.add_argument("-bp", "--bin_positions",
-                            action="append",
-                            default=[],
-                            # type=int,
-                            # dest="list",
-                            help="""The bin position on the corresponding chromosome, be careful that for each 
+    parser.add_argument("-bp", "--bin_positions",
+                        action="append",
+                        default=[],
+                        # type=int,
+                        # dest="list",
+                        help="""The bin position on the corresponding chromosome, be careful that for each 
                                 position/list of positions there is one and only one chromosome""")
 
-        parser.add_argument("-id", "--identifier",
-                            action="store_true",
-                            help="If the retrieval of read IDs is needed")
+    parser.add_argument("-id", "--identifier",
+                        action="store_true",
+                        help="If the retrieval of read IDs is needed")
 
-        parser.add_argument("-f", "--folder",
-                            nargs="+",
-                            default=["./"],
-                            help="The path to the folder in which are located the files to be analyzed (.bam)")
+    parser.add_argument("-f", "--folder",
+                        nargs="+",
+                        default=["./"],
+                        help="The path to the folder in which are located the files to be analyzed (.bam)")
 
-        parser.add_argument("-op", "--output_pickle",
-                            default='./',
-                            help="The path to the folder in which search the pickle file already created")
+    parser.add_argument("-op", "--output_pickle",
+                        default='./',
+                        help="The path to the folder in which search the pickle file already created")
 
-        parser.add_argument("-sf", "--saving_folder",
-                            type=str,
-                            default="./",
-                            help="""Path to the directory in which save all plots""")
+    parser.add_argument("-sf", "--saving_folder",
+                        type=str,
+                        default="./",
+                        help="""Path to the directory in which save all outputs.
+                         ATTENTION: for plots, new directories is automatically created with default name: 
+                         /plots/[bin_size]/""")
 
-        parser.add_argument("-fo", "--saving_format",
-                            type=str,
-                            default="svg",
-                            help="""file format for saved plot images, the choice is between:\n
+    parser.add_argument("-fo", "--saving_format",
+                        type=str,
+                        default="svg",
+                        help="""file format for saved plot images, the choice is between:\n
                                  ["svg", "jpeg", "pdf", "png"]\n
                                  default format is: svg""")
 
-        parser.add_argument("-vb", "--violin_bar",
-                            action="store_true",
-                            help="If specified BRAN return and save only the violin and the bar plots")
+    parser.add_argument("-vb", "--violin_bar",
+                        action="store_true",
+                        help="If specified BRAN return and save only the violin and the bar plots")
 
-        parser.add_argument("-sc", "--scatter",
-                            action="store_true",
-                            help="If specified BRAN return and save only the scatter distribution plots")
+    parser.add_argument("-sc", "--scatter",
+                        action="store_true",
+                        help="If specified BRAN return and save only the scatter distribution plots")
 
-        parser.add_argument("-cp", "--fold_change_pl",
-                            action="store_true",
-                            help="If specified BRAN return and save only the fold change plots")
+    parser.add_argument("-cp", "--fold_change_pl",
+                        action="store_true",
+                        help="If specified BRAN return and save only the fold change plots")
 
-        parser.add_argument("-r", "--reference",
-                            type=str,
-                            default=None,
-                            help="""The path of the reference file, if not specified, the coverage is calculated with the
+    parser.add_argument("-r", "--reference",
+                        type=str,
+                        default=None,
+                        help="""The path of the reference file, if not specified, the coverage is calculated with the
                             mean of the mapping reads for all the samples""")
 
-        parser.add_argument("-i", "--read_info",
-                            action="store_true",
-                            default=None,
-                            help="""If specified, a data-frame with information on the read ID, and if the read
+    parser.add_argument("-i", "--read_info",
+                        action="store_true",
+                        default=None,
+                        help="""If specified, a data-frame with information on the read ID, and if the read
                                 and its mate map in the same bin in the same chromosome, is created""")
-        # ---------------------------------------
-        # parser.add_argument("-N", "--Ns_count",
-        #                     action="store_true",
-        #                     help="""Specify if the Ns counts has to be included in the plot of the read counts""")
+    # ---------------------------------------
+    # parser.add_argument("-N", "--Ns_count",
+    #                     action="store_true",
+    #                     help="""Specify if the Ns counts has to be included in the plot of the read counts""")
 
-        # parser.add_argument("-gi", "--general_info",
-        #                     action="store_true",
-        #                     help="""If specified, distribution_plot, norm_plot_all, (filtered_plot_all) and
-        #                     fold_change_plot are displayed""")
+    # parser.add_argument("-gi", "--general_info",
+    #                     action="store_true",
+    #                     help="""If specified, distribution_plot, norm_plot_all, (filtered_plot_all) and
+    #                     fold_change_plot are displayed""")
 
-        args = parser.parse_args()
-        dict_args = vars(parser.parse_args([]))
+    args = parser.parse_args()
+    dict_args = vars(parser.parse_args([]))
 
-        if args.flag_list != dict_args["flag_list"]:
-            flags = dict_args["flag_list"] + args.flag_list
+    if args.flag_list != dict_args["flag_list"]:
+        flags = dict_args["flag_list"] + args.flag_list
+    else:
+        flags = args.flag_list
+
+    if args.folder != dict_args["folder"]:
+        bam_folder = dict_args["folder"] + args.folder
+    else:
+        bam_folder = args.folder
+
+    if args.identifier:
+        if not os.path.exists(args.saving_folder):
+            os.mkdir(args.saving_folder)
         else:
-            flags = args.flag_list
+            pass
+        # print(args.bin_chromosomes)
+        # print(args.bin_positions)
+        bin_pos = []
+        for el in args.bin_positions:
+            if len(el) > 1:
+                bin_pos.append(el.split(","))
+            else:
+                bin_pos.append(el)
+        # print(bin_pos)
+        bin_dictionary = dict(zip(args.bin_chromosomes, bin_pos))
+        # print(bin_dictionary)
+        ide = BinReadIdentifier(args.bin_size,
+                                flags,
+                                bam_folder,
+                                args.saving_folder,
+                                bin_dictionary,
+                                args.cigar,
+                                args.cigar_filter)
+        # ide.load_bam()
+        ide.get_read_ids()
 
-        if args.folder != dict_args["folder"]:
-            bam_folder = dict_args["folder"] + args.folder
-        else:
-            bam_folder = args.folder
-
-        if args.identifier:
-            if not os.path.exists(args.saving_folder):
-                os.mkdir(args.saving_folder)
+    else:
+        if args.control_name:
+            if not os.path.exists(args.output_pickle):
+                os.mkdir(args.output_pickle)
             else:
                 pass
-            # print(args.bin_chromosomes)
-            # print(args.bin_positions)
-            bin_pos = []
-            for el in args.bin_positions:
-                if len(el) > 1:
-                    bin_pos.append(el.split(","))
-                else:
-                    bin_pos.append(el)
-            # print(bin_pos)
-            bin_dictionary = dict(zip(args.bin_chromosomes, bin_pos))
-            # print(bin_dictionary)
-            ide = TestingBinReadIdentifier(args.bin_size,
-                                           flags,
-                                           bam_folder,
-                                           args.saving_folder,
-                                           bin_dictionary,
-                                           args.cigar,
-                                           args.cigar_filter)
-            # ide.load_bam()
-            ide.get_read_ids()
 
-        else:
-            if args.control_name:
-                analyzer = TestingBinReadAnalyzer(bam_folder,
-                                                  args.bin_size,
-                                                  args.reference,
-                                                  flags,
-                                                  args.cigar_filter,
-                                                  args.output_pickle)
+            analyzer = BinReadAnalyzer(bam_folder,
+                                       args.bin_size,
+                                       args.reference,
+                                       flags,
+                                       args.cigar_filter,
+                                       args.output_pickle)
 
-                analyzer.load_data(cigar=args.cigar,
-                                   cigar_filter=args.cigar_filter,
-                                   reference=args.reference,
-                                   read_info=args.read_info,
-                                   unmapped=args.unmapped,
-                                   verbose=True)
+            analyzer.load_data(cigar=args.cigar,
+                               cigar_filter=args.cigar_filter,
+                               reference=args.reference,
+                               read_info=args.read_info,
+                               unmapped=args.unmapped,
+                               verbose=True)
 
-                plots_folder = args.saving_folder
-                if not os.path.exists(plots_folder):
-                    os.mkdir(plots_folder)
-                else:
-                    pass
-                analyzer.sorted_df(args.saving_folder)
-
-                # exit(1)
-                analyzer.normalize_bins(args.control_name)
-                analyzer.calc_fold_change(args.control_name, args.pairwise)
-                analyzer.summary_sig_bins(args.fold_change)
-                analyzer.output_sig_positions(args.fold_change, args.control_name, args.output_pickle)
-                analyzer.plot(plots_folder, args.saving_format, args.cigar,
-                              args.unmapped, args.reference, args.fold_change, args.pairwise, args.control_name,
-                              args.violin_bar, args.scatter, args.fold_change_pl, chr_name=args.chromosome,
-                              sample=args.sample)
+            plots_folder = "{}/plots/{}/".format(args.saving_folder, str(args.bin_size))
+            if not os.path.exists(plots_folder):
+                os.mkdir(plots_folder)
             else:
-                print("Argument '-co/--control_name' not passed, "
-                      "it has to be passed in order for fold_change to be calculated")
-    # version 29/06/2020
+                pass
+            analyzer.sorted_df(args.saving_folder)
+
+            # exit(1)
+            analyzer.normalize_bins(args.control_name)
+            analyzer.calc_fold_change(args.control_name, args.pairwise)
+            analyzer.summary_sig_bins(args.fold_change)
+            analyzer.output_sig_positions(args.fold_change, args.control_name, args.saving_folder)
+            analyzer.plot(plots_folder, args.saving_format, args.cigar,
+                          args.unmapped, args.reference, args.fold_change, args.pairwise, args.control_name,
+                          args.violin_bar, args.scatter, args.fold_change_pl, chr_name=args.chromosome,
+                          sample=args.sample)
+        else:
+            print("Argument '-co/--control_name' not passed, "
+                  "it has to be passed in order for fold_change to be calculated")
+# version 29/06/2020
