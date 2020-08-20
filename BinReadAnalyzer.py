@@ -435,7 +435,7 @@ class BinReadAnalyzer:
                 summary_sig_data["fc"] += ["+"] * len(sig_data_pos) + ["-"] * len(sig_data_neg)
 
         sum_sig_bins = pd.DataFrame(summary_sig_data)
-
+        print(sum_sig_bins)
         for col in self.clipped_fold_change:
             if col != "chr" and col != "bin":
                 sig_clip_data_pos = self.clipped_fold_change[self.clipped_fold_change[col] > fc]
@@ -450,6 +450,7 @@ class BinReadAnalyzer:
                 # print(len(sig_clip_data["bin"] * self.bin_size))
                 summary_sig_clip_data["end_pos"] += (list((sig_clip_data["bin"] * self.bin_size) + self.bin_size))
                 # print(len((sig_clip_data["bin"] * self.bin_size) + self.bin_size))
+
                 summary_sig_clip_data["clone_name"] += [col.replace("_cig_filt", "")] * len(sig_clip_data)
                 # print(len([col] * len(sig_clip_data)))
                 summary_sig_clip_data["type"] += ["clipped_count"] * len(sig_clip_data)
@@ -460,6 +461,7 @@ class BinReadAnalyzer:
 
         self.set_sig_bins(sum_sig_bins)
         self.set_sig_clip_bins(sum_sig_clip_bins)
+
         return self.sig_bins, self.sig_clip_bins
 
     def add_ns_trace(self, fig, reference=None, chrom=None):
@@ -877,12 +879,12 @@ if __name__ == "__main__":
             analyzer.normalize_bins(args.control_name)
             analyzer.calc_fold_change(args.control_name, args.pairwise)
             analyzer.summary_sig_bins(args.fold_change)
-            analyzer.output_sig_positions(args.fold_change, args.control_name, args.saving_folder)
-            analyzer.plot(plots_folder, args.saving_format, args.cigar,
-                          args.unmapped, args.reference, args.fold_change, args.pairwise, args.control_name,
-                          args.violin_bar, args.scatter, args.fold_change_pl, chr_name=args.chromosome,
-                          sample=args.sample)
-        else:
-            print("Argument '-co/--control_name' not passed, "
-                  "it has to be passed in order for fold_change to be calculated")
-# version 29/06/2020
+#             analyzer.output_sig_positions(args.fold_change, args.control_name, args.saving_folder)
+#             analyzer.plot(plots_folder, args.saving_format, args.cigar,
+#                           args.unmapped, args.reference, args.fold_change, args.pairwise, args.control_name,
+#                           args.violin_bar, args.scatter, args.fold_change_pl, chr_name=args.chromosome,
+#                           sample=args.sample)
+#         else:
+#             print("Argument '-co/--control_name' not passed, "
+#                   "it has to be passed in order for fold_change to be calculated")
+# # version 29/06/2020

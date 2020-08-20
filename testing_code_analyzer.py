@@ -368,35 +368,40 @@ class TestingBinReadAnalyzer:
             norm_bar.update(update_bar)
 
         self.set_norm_unmapped(norm_unmapped)
-        # print(norm_clip_df)
+        # print("norm_chr4_df")
+        # norm_4 = norm_clip_df[norm_clip_df["chr"] == "CH.chr4"]
+        # print(norm_4[norm_4["bin"] == [2, 3]])
         return self.norm, self.log_norm, self.norm_clip, self.log_norm_clip, self.norm_unmapped
 
     def calc_fold_change(self, control_name, pairwise=False):
         # fc = self.log_norm["test6_alignSort_REDONE"] - self.log_norm["reference30x_alignSort"]
-
         if pairwise:
             print("\nPairwise Fold Change calculation:\n")
             pw_fc_bar = progressbar.ProgressBar(max_value=progressbar.UnknownLength)
             update_bar = 0
-            fc_read_counts = {"chr": self.log_norm["chr"], "bin": self.log_norm["bin"]}
+            fc_read_counts = {"chr": self.log_norm["chr"], "bin": self.log_norm["bin"],
+                              control_name: self.norm[control_name]}
             for col in self.log_norm:
                 if col != control_name and col != "bin" and col != "chr":
+                    fc_read_counts[col] = self.norm[col]
                     pw_fc = self.log_norm[col] - self.log_norm[control_name]
                     fc_read_counts[col + "-" + control_name] = list(pw_fc)
                     update_bar += 1
                     pw_fc_bar.update(update_bar)
 
-            fc_clipped_counts = {"chr": self.log_norm_clip["chr"], "bin": self.log_norm_clip["bin"]}
+            fc_clipped_counts = {"chr": self.log_norm_clip["chr"], "bin": self.log_norm_clip["bin"],
+                                 control_name + "_cig_filt": self.norm_clip[control_name + "_cig_filt"]}
             for col in self.log_norm_clip:
                 if col != control_name + "_cig_filt" and col != "bin" and col != "chr":
+                    fc_clipped_counts[col] = self.norm_clip[col]
                     pw_clipped_fc = self.log_norm_clip[col] - self.log_norm_clip[control_name + "_cig_filt"]
                     fc_clipped_counts[col + "-" + control_name] = list(pw_clipped_fc)
                     update_bar += 1
                     pw_fc_bar.update(update_bar)
             fc_df = pd.DataFrame(fc_read_counts)
             fc_clip_df = pd.DataFrame(fc_clipped_counts)
-            print(fc_clip_df)
-            # print(fc_df)
+            print(fc_df.columns)
+            # print(fc_clip_df.columns)
             self.set_fold_change(fc_df)
             self.set_clipped_fold_change(fc_clip_df)
 
@@ -426,40 +431,56 @@ class TestingBinReadAnalyzer:
             self.set_clipped_fold_change(fc_clip_all)
             return self.fold_change, self.clipped_fold_change
 
-    def summary_sig_bins(self, fc):
+    def summary_sig_bins(self, fc, control_name):
         # dataframe for information on significant BINS
-        summary_sig_data = {"chr": [], "start_pos": [], "end_pos": [], "clone_name": [], "type": [], "fc": []}
-        summary_sig_clip_data = {"chr": [], "start_pos": [], "end_pos": [], "clone_name": [], "type": [], "fc": []}
+        summary_sig_data = {"chr": [], "start_pos": [], "end_pos": [], "count": [], "control_count": [],
+                            "clone_name": [], "type": [], "fc": []}
+        summary_sig_clip_data = {"chr": [], "start_pos": [], "end_pos": [], "count": [], "control_count": [],
+                                 "clone_name": [], "type": [], "fc": []}
 
         for col in self.fold_change.columns:
-            if col != "chr" and col != "bin":
+            if col != "chr" and col != "bin" and col != control_name and "-" in col:
+                # print(col)
+                # col_data = self.fold_change[["chr", "bin", col]]
+                # # print(col, "count_data")
+                # sig_data_pos = col_data[col_data[col] > fc]
                 sig_data_pos = self.fold_change[self.fold_change[col] > fc]
+                # print(sig_data_pos)
+                # sig_data_neg = col_data[col_data[col] < -fc]
                 sig_data_neg = self.fold_change[self.fold_change[col] < -fc]
-
                 sig_data = pd.concat([sig_data_pos, sig_data_neg])
-
+                sig_data.to_csv("./" + col + ".tsv", sep="\t")
                 # print(sig_data)
+                # print(col)
                 summary_sig_data["chr"] += list(sig_data["chr"])
                 # print(len(list(sig_data["chr"])))
                 summary_sig_data["start_pos"] += (list(sig_data["bin"] * self.bin_size))
                 # print(len(sig_data["bin"] * self.bin_size))
                 summary_sig_data["end_pos"] += (list((sig_data["bin"] * self.bin_size) + self.bin_size))
                 # print(len((sig_data["bin"] * self.bin_size) + self.bin_size))
+                # print(sig_data[col[:col.find("-")]])
+                summary_sig_data["count"] += (list(sig_data[col[:col.find("-")]]))
+                # print(len(list(sig_data[col[:col.find("-")]])))
+                summary_sig_data["control_count"] += (list(sig_data[control_name]))
+                # print(len(list(sig_data[control_name])))
                 summary_sig_data["clone_name"] += [col] * len(sig_data)
                 # print(len([col] * len(sig_data)))
                 summary_sig_data["type"] += ["read_count"] * len(sig_data)
                 # print(len(["clipped_count"] * len(sig_data)))
                 summary_sig_data["fc"] += ["+"] * len(sig_data_pos) + ["-"] * len(sig_data_neg)
-
+                # print(len(["+"] * len(sig_data_pos) + ["-"] * len(sig_data_neg)))
         sum_sig_bins = pd.DataFrame(summary_sig_data)
-
+        # print(sum_sig_bins)
+        sum_sig_bins.to_csv("./sum_sig_bins.tsv", sep="\t")
+        # print(sum_sig_bins)
         for col in self.clipped_fold_change:
-            if col != "chr" and col != "bin":
+            if col != "chr" and col != "bin" and col != control_name and "-" in col:
                 sig_clip_data_pos = self.clipped_fold_change[self.clipped_fold_change[col] > fc]
                 sig_clip_data_neg = self.clipped_fold_change[self.clipped_fold_change[col] < -fc]
 
                 sig_clip_data = pd.concat([sig_clip_data_pos, sig_clip_data_neg])
-
+                # print("sig_clip_data")
+                # print(sig_clip_data)
                 # print(sig_bins)
                 summary_sig_clip_data["chr"] += list(sig_clip_data["chr"])
                 # print(len(list(sig_clip_data["chr"])))
@@ -467,6 +488,8 @@ class TestingBinReadAnalyzer:
                 # print(len(sig_clip_data["bin"] * self.bin_size))
                 summary_sig_clip_data["end_pos"] += (list((sig_clip_data["bin"] * self.bin_size) + self.bin_size))
                 # print(len((sig_clip_data["bin"] * self.bin_size) + self.bin_size))
+                summary_sig_clip_data["count"] += (list(sig_clip_data[col[:col.find("-")]]))
+                summary_sig_clip_data["control_count"] += (list(sig_clip_data[control_name + "_cig_filt"]))
                 summary_sig_clip_data["clone_name"] += [col.replace("_cig_filt", "")] * len(sig_clip_data)
                 # print(len([col] * len(sig_clip_data)))
                 summary_sig_clip_data["type"] += ["clipped_count"] * len(sig_clip_data)
@@ -474,7 +497,7 @@ class TestingBinReadAnalyzer:
                 summary_sig_clip_data["fc"] += ["+"] * len(sig_clip_data_pos) + ["-"] * len(sig_clip_data_neg)
 
         sum_sig_clip_bins = pd.DataFrame(summary_sig_clip_data)
-
+        sum_sig_clip_bins.to_csv("./sum_sig_clip_bins.tsv", sep="\t")
         self.set_sig_bins(sum_sig_bins)
         self.set_sig_clip_bins(sum_sig_clip_bins)
         return self.sig_bins, self.sig_clip_bins
@@ -886,11 +909,11 @@ if __name__ == "__main__":
             # exit(1)
             analyzer.normalize_bins(args.control_name)
             analyzer.calc_fold_change(args.control_name, args.pairwise)
-            analyzer.summary_sig_bins(args.fold_change)
+            analyzer.summary_sig_bins(args.fold_change, args.control_name)
             analyzer.output_sig_positions(args.fold_change, args.control_name, args.output_pickle)
-            analyzer.plot(plots_folder, args.saving_format, args.cigar,
-                          args.unmapped, args.reference, args.fold_change, args.pairwise, args.control_name,
-                          args.violin_bar, args.scatter, args.fold_change_pl, chr_name=args.chromosome, sample=args.sample)
+            # analyzer.plot(plots_folder, args.saving_format, args.cigar,
+            #               args.unmapped, args.reference, args.fold_change, args.pairwise, args.control_name,
+            #               args.violin_bar, args.scatter, args.fold_change_pl, chr_name=args.chromosome, sample=args.sample)
         else:
             print("Argument '-co/--control_name' not passed, "
                   "it has to be passed in order for fold_change to be calculated")
