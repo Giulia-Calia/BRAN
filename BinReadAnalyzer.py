@@ -254,9 +254,8 @@ class BinReadAnalyzer:
             single_df = read_counts[read_counts["chr"] == chrom]
             sorted_df = pd.concat([sorted_df, single_df])
         sorted_df = sorted_df.reset_index(drop=True)
+
         self.set_read_counts(sorted_df)
-        # print("sorted_read_counts: \n", self.parameters["read_counts"])
-        # sorted_df.to_csv(saving_folder + "sorted_df.txt", sep="\t")
         return self.read_counts
 
     def normalize_bins(self, control_name):
@@ -266,8 +265,6 @@ class BinReadAnalyzer:
         table of counts, as well as a series of other function specifically
         implemented for RNA-Seq; the normalization for clipped counts is done
         manually"""
-        # self.read_counts.to_csv(str(self.bin_size) + "_norm_counts_check.txt", sep="\t")
-        # read_counts = self.no_repeats_df_transformation()
         # the edgeR package is imported using rpy2 syntax to access to all its built-in functions
         read_counts_edger = {}  # a dictionary of sample: vector_of_counts to work with edger
         clipped_count = {}
@@ -282,10 +279,8 @@ class BinReadAnalyzer:
             if col != "chr" and col != "bin" and "cig_filt" not in col:
                 # creates an element of the dictionary [sample_name]: r_vector_of_counts
                 read_counts_edger[col] = robjects.IntVector(self.read_counts[col])
-                # print(read_counts_edger[col])
 
             elif "cig_filt" in col:
-                # print(list(read_counts[col]))
                 clipped_count[col] = self.read_counts[col]
 
             else:
@@ -315,7 +310,6 @@ class BinReadAnalyzer:
 
         self.set_norm(norm_counts_df)
         self.set_log_norm(log_norm_counts_df)
-        # print(self.norm)
 
         clipped_count_df = pd.DataFrame(clipped_count)  # clipped_count filled before
         norm_clip = {}
@@ -350,118 +344,117 @@ class BinReadAnalyzer:
             norm_bar.update(update_bar)
 
         self.set_norm_unmapped(norm_unmapped)
-        # print(norm_clip_df)
         return self.norm, self.log_norm, self.norm_clip, self.log_norm_clip, self.norm_unmapped
 
     def calc_fold_change(self, control_name, pairwise=False):
-        # fc = self.log_norm["test6_alignSort_REDONE"] - self.log_norm["reference30x_alignSort"]
 
         if pairwise:
             print("\nPairwise Fold Change calculation:\n")
             pw_fc_bar = progressbar.ProgressBar(max_value=progressbar.UnknownLength)
             update_bar = 0
-            fc_read_counts = {"chr": self.log_norm["chr"], "bin": self.log_norm["bin"]}
+            fc_read_counts = {"chr": self.log_norm["chr"], "bin": self.log_norm["bin"],
+                              control_name: self.norm[control_name]}
+            fc_clipped_counts = {"chr": self.log_norm_clip["chr"], "bin": self.log_norm_clip["bin"],
+                                 control_name + "_cig_filt": self.norm_clip[control_name + "_cig_filt"]}
+
             for col in self.log_norm:
                 if col != control_name and col != "bin" and col != "chr":
+                    fc_read_counts[col] = self.norm[col]
                     pw_fc = self.log_norm[col] - self.log_norm[control_name]
                     fc_read_counts[col + "-" + control_name] = list(pw_fc)
                     update_bar += 1
                     pw_fc_bar.update(update_bar)
 
-            fc_clipped_counts = {"chr": self.log_norm_clip["chr"], "bin": self.log_norm_clip["bin"]}
             for col in self.log_norm_clip:
                 if col != control_name + "_cig_filt" and col != "bin" and col != "chr":
+                    fc_clipped_counts[col] = self.norm_clip[col]
                     pw_clipped_fc = self.log_norm_clip[col] - self.log_norm_clip[control_name + "_cig_filt"]
                     fc_clipped_counts[col + "-" + control_name] = list(pw_clipped_fc)
                     update_bar += 1
                     pw_fc_bar.update(update_bar)
+
             fc_df = pd.DataFrame(fc_read_counts)
             fc_clip_df = pd.DataFrame(fc_clipped_counts)
-            print(fc_clip_df)
-            # print(fc_df)
+
             self.set_fold_change(fc_df)
             self.set_clipped_fold_change(fc_clip_df)
 
             return self.fold_change, self.clipped_fold_change
 
         else:
-            # mean count/bin of clones - control count/bin
             print("\nOne vs All Fold Change calculation:\n")
             fc_bar = progressbar.ProgressBar(max_value=progressbar.UnknownLength)
             fc_update_bar = 0
             fc_all = self.log_norm[["chr", "bin"]]
             clones_norm_df = self.log_norm.drop(columns=["chr", "bin", control_name]).mean(axis=1)
-            for el in range(len(clones_norm_df)):
+
+            for r in range(len(clones_norm_df)):
                 fc_update_bar += 1
                 fc_bar.update(fc_update_bar)
             tmp_fc = pd.DataFrame({"fc": clones_norm_df - self.log_norm[control_name]})
             fc_all = pd.concat([fc_all, tmp_fc], axis=1)
 
             fc_clip_all = self.log_norm_clip[["chr", "bin"]]
-            clones_clip_norm_df = self.log_norm_clip.drop(columns=["chr", "bin", control_name + "_cig_filt"]).mean(
-                axis=1)
+
+            clones_clip_norm_df = self.log_norm_clip.drop(
+                columns=["chr", "bin", control_name + "_cig_filt"]).mean(axis=1)
+
             tmp_clip_fc = pd.DataFrame(
                 {"clip_fc": clones_clip_norm_df - self.log_norm_clip[control_name + "_cig_filt"]})
             fc_clip_all = pd.concat([fc_clip_all, tmp_clip_fc], axis=1)
-            # print(fc_all)
-            # print(fc_clip_all)
+
             self.set_fold_change(fc_all)
             self.set_clipped_fold_change(fc_clip_all)
             return self.fold_change, self.clipped_fold_change
 
-    def summary_sig_bins(self, fc):
+    def summary_sig_bins(self, fc, control_name):
         # dataframe for information on significant BINS
-        summary_sig_data = {"chr": [], "start_pos": [], "end_pos": [], "clone_name": [], "type": [], "fc": []}
-        summary_sig_clip_data = {"chr": [], "start_pos": [], "end_pos": [], "clone_name": [], "type": [], "fc": []}
+        summary_sig_data = {"chr": [], "start_pos": [], "end_pos": [], "count": [], "control_count": [],
+                            "clone_name": [], "type": [], "fc": []}
+        summary_sig_clip_data = {"chr": [], "start_pos": [], "end_pos": [], "count": [], "control_count": [],
+                                 "clone_name": [], "type": [], "fc": []}
 
         for col in self.fold_change.columns:
-            if col != "chr" and col != "bin":
+            if col != "chr" and col != "bin" and col != control_name and "-" in col:
                 sig_data_pos = self.fold_change[self.fold_change[col] > fc]
                 sig_data_neg = self.fold_change[self.fold_change[col] < -fc]
 
                 sig_data = pd.concat([sig_data_pos, sig_data_neg])
 
-                # print(sig_data)
                 summary_sig_data["chr"] += list(sig_data["chr"])
-                # print(len(list(sig_data["chr"])))
-                summary_sig_data["start_pos"] += (list(sig_data["bin"] * self.bin_size))
-                # print(len(sig_data["bin"] * self.bin_size))
                 summary_sig_data["end_pos"] += (list((sig_data["bin"] * self.bin_size) + self.bin_size))
-                # print(len((sig_data["bin"] * self.bin_size) + self.bin_size))
+                summary_sig_data["count"] += (list(sig_data[col[:col.find("-")]]))
+                summary_sig_data["control_count"] += (list(sig_data[control_name]))
                 summary_sig_data["clone_name"] += [col] * len(sig_data)
-                # print(len([col] * len(sig_data)))
                 summary_sig_data["type"] += ["read_count"] * len(sig_data)
-                # print(len(["clipped_count"] * len(sig_data)))
                 summary_sig_data["fc"] += ["+"] * len(sig_data_pos) + ["-"] * len(sig_data_neg)
 
         sum_sig_bins = pd.DataFrame(summary_sig_data)
-        print(sum_sig_bins)
+        # ---- to transform float counts coming from normalization process into integer counts ----
+        sum_sig_bins[["count", "control_count"]] = sum_sig_bins[["count", "control_count"]].astype(int)
+
         for col in self.clipped_fold_change:
-            if col != "chr" and col != "bin":
+            if col != "chr" and col != "bin" and col != control_name and "-" in col:
                 sig_clip_data_pos = self.clipped_fold_change[self.clipped_fold_change[col] > fc]
                 sig_clip_data_neg = self.clipped_fold_change[self.clipped_fold_change[col] < -fc]
 
                 sig_clip_data = pd.concat([sig_clip_data_pos, sig_clip_data_neg])
 
-                # print(sig_bins)
                 summary_sig_clip_data["chr"] += list(sig_clip_data["chr"])
-                # print(len(list(sig_clip_data["chr"])))
                 summary_sig_clip_data["start_pos"] += (list(sig_clip_data["bin"] * self.bin_size))
-                # print(len(sig_clip_data["bin"] * self.bin_size))
                 summary_sig_clip_data["end_pos"] += (list((sig_clip_data["bin"] * self.bin_size) + self.bin_size))
-                # print(len((sig_clip_data["bin"] * self.bin_size) + self.bin_size))
-
+                summary_sig_clip_data["count"] += (list(sig_clip_data[col[:col.find("-")]]))
+                summary_sig_clip_data["control_count"] += (list(sig_clip_data[control_name + "_cig_filt"]))
                 summary_sig_clip_data["clone_name"] += [col.replace("_cig_filt", "")] * len(sig_clip_data)
-                # print(len([col] * len(sig_clip_data)))
                 summary_sig_clip_data["type"] += ["clipped_count"] * len(sig_clip_data)
-                # print(len(["clipped_count"] * len(sig_clip_data)))
                 summary_sig_clip_data["fc"] += ["+"] * len(sig_clip_data_pos) + ["-"] * len(sig_clip_data_neg)
 
         sum_sig_clip_bins = pd.DataFrame(summary_sig_clip_data)
+        # ---- to transform float counts coming from normalization process into integer counts ----
+        sum_sig_clip_bins[["count", "control_count"]] = sum_sig_clip_bins[["count", "control_count"]].astype(int)
 
         self.set_sig_bins(sum_sig_bins)
         self.set_sig_clip_bins(sum_sig_clip_bins)
-
         return self.sig_bins, self.sig_clip_bins
 
     def add_ns_trace(self, fig, reference=None, chrom=None):
