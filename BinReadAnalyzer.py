@@ -103,9 +103,9 @@ class BinReadAnalyzer:
         self.fold_change = None
         self.clipped_fold_change = None
         self.sig_bins = None
-        # self.no_sig_bins = None
+        self.nosig_bins = None
         self.sig_clip_bins = None
-        # self.no_sig_clip_bins = None
+        self.nosig_clip_bins = None
 
     def set_parameters(self, param):
         """set parameters as actual parameters"""
@@ -146,15 +146,15 @@ class BinReadAnalyzer:
         """set the data structure of significant read fold-change counts"""
         self.sig_bins = sig_data
 
-    # def set_no_sig_bins(self, no_sig_data):
-    #     self.no_sig_bins = pd.concat([no_sig_data])
+    def set_no_sig_bins(self, no_sig_data):
+        self.nosig_bins = pd.concat([no_sig_data])
 
     def set_sig_clip_bins(self, sig_clip_data):
         """set the data structure of significant clipped fold-change counts"""
         self.sig_clip_bins = sig_clip_data
 
-    # def set_no_sig_clip_bins(self, no_sig_clip_data):
-    #     self.no_sig_clip_bins = pd.concat([no_sig_clip_data])
+    def set_no_sig_clip_bins(self, no_sig_clip_data):
+        self.nosig_clip_bins = pd.concat([no_sig_clip_data])
 
     def load_data(self, cigar, cigar_filter=None, reference=None, read_info=None, unmapped=None,
                   verbose=False):
@@ -409,29 +409,70 @@ class BinReadAnalyzer:
 
     def summary_sig_bins(self, fc, control_name):
         # dataframe for information on significant BINS
-        summary_sig_data = {"chr": [], "start_pos": [], "end_pos": [], "count": [], "control_count": [],
-                            "clone_name": [], "type": [], "fc": []}
+
         summary_sig_clip_data = {"chr": [], "start_pos": [], "end_pos": [], "count": [], "control_count": [],
                                  "clone_name": [], "type": [], "fc": []}
+        summary_sig_data = {"chr": [], "start_pos": [], "end_pos": [], "count": [], "control_count": [],
+                            "clone_name": [], "type": [], "fc": []}
+
+        summary_nosig_data = {"chr": [], "start_pos": [], "end_pos": [], "count": [], "control_count": [],
+                              "clone_name": [], "type": [], "fc": []}
+        summary_nosig_clip_data = {"chr": [], "start_pos": [], "end_pos": [], "count": [], "control_count": [],
+                                   "clone_name": [], "type": [], "fc": []}
 
         for col in self.fold_change.columns:
             if col != "chr" and col != "bin" and col != control_name and "-" in col:
                 sig_data_pos = self.fold_change[self.fold_change[col] > fc]
                 sig_data_neg = self.fold_change[self.fold_change[col] < -fc]
-
                 sig_data = pd.concat([sig_data_pos, sig_data_neg])
-
+                nosig = self.fold_change.drop(sig_data.index)
+                # sig_data.to_csv("./" + col + ".tsv", sep="\t")
+                # nosig.to_csv("./" + col + "nosig.tsv", sep="\t")
+                print(col)
+                print("SIG")
                 summary_sig_data["chr"] += list(sig_data["chr"])
-                summary_sig_data["end_pos"] += (list((sig_data["bin"] * self.bin_size) + self.bin_size))
-                summary_sig_data["count"] += (list(sig_data[col[:col.find("-")]]))
-                summary_sig_data["control_count"] += (list(sig_data[control_name]))
-                summary_sig_data["clone_name"] += [col] * len(sig_data)
-                summary_sig_data["type"] += ["read_count"] * len(sig_data)
-                summary_sig_data["fc"] += ["+"] * len(sig_data_pos) + ["-"] * len(sig_data_neg)
+                print(len(list(sig_data["chr"])))
+                summary_sig_data["start_pos"] += list(sig_data["bin"] * self.bin_size)
+                print(len(sig_data["bin"] * self.bin_size))
+                summary_sig_data["end_pos"] += list((sig_data["bin"] * self.bin_size) + self.bin_size)
+                print(len((sig_data["bin"] * self.bin_size) + self.bin_size))
+                summary_sig_data["count"] += list(sig_data[col[:col.find("-")]])
+                print(len(list(sig_data[col[:col.find("-")]])))
+                summary_sig_data["control_count"] += list(sig_data[control_name])
+                print(len(list(sig_data[control_name])))
+                summary_sig_data["clone_name"] += list([col] * len(sig_data))
+                print(len([col] * len(sig_data)))
+                summary_sig_data["type"] += list(["read_count"] * len(sig_data))
+                print(len(["read_count"] * len(sig_data)))
+                summary_sig_data["fc"] += list(["+"] * len(sig_data_pos) + ["-"] * len(sig_data_neg))
+                print(len(["+"] * len(sig_data_pos) + ["-"] * len(sig_data_neg)))
+
+                print("NO SIG")
+                summary_nosig_data["chr"] += list(nosig["chr"])
+                print(len(list(nosig["chr"])))
+                summary_nosig_data["start_pos"] += list(nosig["bin"] * self.bin_size)
+                print(len(nosig["bin"] * self.bin_size))
+                summary_nosig_data["end_pos"] += list((nosig["bin"] * self.bin_size) + self.bin_size)
+                print(len((nosig["bin"] * self.bin_size) + self.bin_size))
+                summary_nosig_data["count"] += list(nosig[col[:col.find("-")]])
+                print(len(list(nosig[col[:col.find("-")]])))
+                summary_nosig_data["control_count"] += list(nosig[control_name])
+                print(len(list(nosig[control_name])))
+                summary_nosig_data["clone_name"] += list([col] * len(nosig))
+                print(len([col] * len(nosig)))
+                summary_nosig_data["type"] += list(["read_count"] * len(nosig))
+                print(len(["read_count"] * len(nosig)))
+                summary_nosig_data["fc"] += list("n" * len(nosig))
+                print(len(list("n" * len(nosig))))
 
         sum_sig_bins = pd.DataFrame(summary_sig_data)
+        sum_nosig_bins = pd.DataFrame(summary_nosig_data)
+
         # ---- to transform float counts coming from normalization process into integer counts ----
         sum_sig_bins[["count", "control_count"]] = sum_sig_bins[["count", "control_count"]].astype(int)
+        # ---- to check the subdataframe of significant bins ----
+        # sum_sig_bins.to_csv("./sum_sig_bins.tsv", sep="\t")
+        # sum_nosig_bins.to_csv("./sum_NOsig_bins.tsv", sep="\t")
 
         for col in self.clipped_fold_change:
             if col != "chr" and col != "bin" and col != control_name and "-" in col:
@@ -439,23 +480,45 @@ class BinReadAnalyzer:
                 sig_clip_data_neg = self.clipped_fold_change[self.clipped_fold_change[col] < -fc]
 
                 sig_clip_data = pd.concat([sig_clip_data_pos, sig_clip_data_neg])
-
+                nosig_clip_data = self.clipped_fold_change.drop(sig_clip_data.index)
+                # print(sig_bins)
                 summary_sig_clip_data["chr"] += list(sig_clip_data["chr"])
+                # print(len(list(sig_clip_data["chr"])))
                 summary_sig_clip_data["start_pos"] += (list(sig_clip_data["bin"] * self.bin_size))
+                # print(len(sig_clip_data["bin"] * self.bin_size))
                 summary_sig_clip_data["end_pos"] += (list((sig_clip_data["bin"] * self.bin_size) + self.bin_size))
+                # print(len((sig_clip_data["bin"] * self.bin_size) + self.bin_size))
                 summary_sig_clip_data["count"] += (list(sig_clip_data[col[:col.find("-")]]))
+                # print(len([col] * len(sig_clip_data)))
                 summary_sig_clip_data["control_count"] += (list(sig_clip_data[control_name + "_cig_filt"]))
                 summary_sig_clip_data["clone_name"] += [col.replace("_cig_filt", "")] * len(sig_clip_data)
                 summary_sig_clip_data["type"] += ["clipped_count"] * len(sig_clip_data)
+                # print(len(["clipped_count"] * len(sig_clip_data)))
                 summary_sig_clip_data["fc"] += ["+"] * len(sig_clip_data_pos) + ["-"] * len(sig_clip_data_neg)
 
+                summary_nosig_clip_data["chr"] += list(nosig_clip_data["chr"])
+                summary_nosig_clip_data["start_pos"] += (list(nosig_clip_data["bin"] * self.bin_size))
+                summary_nosig_clip_data["end_pos"] += (list((nosig_clip_data["bin"] * self.bin_size) + self.bin_size))
+                summary_nosig_clip_data["count"] += (list(nosig_clip_data[col[:col.find("-")]]))
+                summary_nosig_clip_data["control_count"] += (list(nosig_clip_data[control_name + "_cig_filt"]))
+                summary_nosig_clip_data["clone_name"] += [col.replace("_cig_filt", "")] * len(nosig_clip_data)
+                summary_nosig_clip_data["type"] += ["clipped_count"] * len(nosig_clip_data)
+                summary_nosig_clip_data["fc"] += list("n" * len(nosig_clip_data))
+
         sum_sig_clip_bins = pd.DataFrame(summary_sig_clip_data)
+        sum_nosig_clip_bins = pd.DataFrame(summary_nosig_clip_data)
         # ---- to transform float counts coming from normalization process into integer counts ----
-        sum_sig_clip_bins[["count", "control_count"]] = sum_sig_clip_bins[["count", "control_count"]].astype(int)
+        # sum_sig_clip_bins[["count", "control_count"]] = sum_sig_clip_bins[["count", "control_count"]].astype(int)
+
+        # ---- to check the subdataframe of significant bins ----
+        # sum_sig_clip_bins.to_csv("./sum_sig_clip_bins.tsv", sep="\t")
+        # sum_nosig_clip_bins.to_csv("./sum_NOsig_clip_bins.tsv", sep="\t")
 
         self.set_sig_bins(sum_sig_bins)
         self.set_sig_clip_bins(sum_sig_clip_bins)
-        return self.sig_bins, self.sig_clip_bins
+        self.set_no_sig_bins(sum_nosig_bins)
+        self.set_no_sig_clip_bins(sum_nosig_clip_bins)
+        return self.sig_bins, self.sig_clip_bins, self.nosig_bins, self.nosig_clip_bins
 
     def add_ns_trace(self, fig, reference=None, chrom=None):
         """This method is used in other plotting methods, in order to add the
