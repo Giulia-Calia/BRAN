@@ -324,7 +324,12 @@ class TestingBinReadAnalyzer:
 
         norm_counts_df = pd.DataFrame(norm_counts_dict)
         # pandas data frame of normalized counts
-        norm_counts_df = pd.concat([self.read_counts["chr"], self.read_counts['bin'], norm_counts_df], axis=1)
+        norm_counts_df = pd.concat([self.read_counts["chr"], self.read_counts["bin"], norm_counts_df], axis=1)
+
+        # to transform float counts, that are not truthful for read counts, into integers
+        for col in norm_counts_df:
+            if col != "chr" and col != "bin":
+                norm_counts_df[[col]] = norm_counts_df[[col]].astype(int)
 
         log_norm_counts_df = pd.DataFrame(log_norm_counts_dict)
         # pandas data frame of log normalized counts (to be used in fold change calc)
@@ -353,10 +358,17 @@ class TestingBinReadAnalyzer:
 
         norm_clip_df = pd.DataFrame(norm_clip)
         norm_clip_df = pd.concat([self.read_counts["chr"], self.read_counts["bin"], norm_clip_df], axis=1)
+
+        for col in norm_clip_df:
+            if col != "chr" and col != "bin":
+                norm_clip_df[[col]] = norm_clip_df[[col]].astype(int)
+                # print(norm_clip_df[col])
+
         log_norm_clip_df = pd.DataFrame(log_norm_clip)
         log_norm_clip_df = pd.concat([self.read_counts["chr"], self.read_counts['bin'], log_norm_clip_df], axis=1)
 
         self.set_norm_clip(norm_clip_df)
+        # print(norm_clip_df)
         self.set_log_norm_clip(log_norm_clip_df)
 
         unmapped = self.parameters["unmapped_reads"]
@@ -382,9 +394,15 @@ class TestingBinReadAnalyzer:
                               control_name: self.norm[control_name]}
             for col in self.log_norm:
                 if col != control_name and col != "bin" and col != "chr":
+                    # a column with the normalized value
                     fc_read_counts[col] = self.norm[col]
+                    # self.log_norm[[col]] = self.log_norm[[col]].astype(int)
+                    # # print(self.log_norm[[col]])
+                    # self.log_norm[[control_name]] = self.log_norm[[control_name]].astype(int)
                     pw_fc = self.log_norm[col] - self.log_norm[control_name]
+                    # a column with the fold change value
                     fc_read_counts[col + "-" + control_name] = list(pw_fc)
+                    # print(list(pw_fc))
                     update_bar += 1
                     pw_fc_bar.update(update_bar)
 
@@ -393,15 +411,25 @@ class TestingBinReadAnalyzer:
             for col in self.log_norm_clip:
                 if col != control_name + "_cig_filt" and col != "bin" and col != "chr":
                     fc_clipped_counts[col] = self.norm_clip[col]
+
+                    # self.log_norm_clip[[col]] = self.log_norm_clip[[col]].astype(int)
+                    # self.log_norm_clip[[control_name + "_cig_filt"]] = \
+                    #     self.log_norm_clip[[control_name + "_cig_filt"]].astype(int)
+
                     pw_clipped_fc = self.log_norm_clip[col] - self.log_norm_clip[control_name + "_cig_filt"]
                     fc_clipped_counts[col + "-" + control_name] = list(pw_clipped_fc)
+
                     update_bar += 1
                     pw_fc_bar.update(update_bar)
+
             fc_df = pd.DataFrame(fc_read_counts)
+            # print("\nfc_df\n", fc_df)
             fc_clip_df = pd.DataFrame(fc_clipped_counts)
+            # print("\nclipped_fc\n", fc_clip_df)
             # print(fc_df.columns)
             # print(fc_clip_df.columns)
             self.set_fold_change(fc_df)
+            print(fc_df.columns)
             self.set_clipped_fold_change(fc_clip_df)
 
             return self.fold_change, self.clipped_fold_change
@@ -953,7 +981,7 @@ if __name__ == "__main__":
                                unmapped=args.unmapped,
                                verbose=True)
 
-            plots_folder = args.saving_folder + "/plots_" + str(args.bin_size)
+            plots_folder = "{}/plots/{}/".format(args.saving_folder, str(args.bin_size))
             if not os.path.exists(plots_folder):
                 os.mkdir(plots_folder)
             else:
@@ -965,9 +993,9 @@ if __name__ == "__main__":
             analyzer.calc_fold_change(args.control_name, args.pairwise)
             analyzer.summary_sig_bins(args.fold_change, args.control_name)
             analyzer.output_sig_positions(args.fold_change, args.control_name, args.saving_folder)
-            # analyzer.plot(plots_folder, args.saving_format, args.cigar,
-            #               args.unmapped, args.reference, args.fold_change, args.pairwise, args.control_name,
-            #               args.violin_bar, args.scatter, args.fold_change_pl, chr_name=args.chromosome, sample=args.sample)
+            analyzer.plot(plots_folder, args.saving_format, args.cigar,
+                          args.unmapped, args.reference, args.fold_change, args.pairwise, args.control_name,
+                          args.violin_bar, args.scatter, args.fold_change_pl, chr_name=args.chromosome, sample=args.sample)
         else:
             print("Argument '-co/--control_name' not passed, "
                   "it has to be passed in order for fold_change to be calculated")

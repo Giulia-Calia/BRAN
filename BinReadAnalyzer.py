@@ -265,6 +265,8 @@ class BinReadAnalyzer:
         table of counts, as well as a series of other function specifically
         implemented for RNA-Seq; the normalization for clipped counts is done
         manually"""
+        # self.read_counts.to_csv(str(self.bin_size) + "_norm_counts_check.txt", sep="\t")
+        # read_counts = self.no_repeats_df_transformation()
         # the edgeR package is imported using rpy2 syntax to access to all its built-in functions
         read_counts_edger = {}  # a dictionary of sample: vector_of_counts to work with edger
         clipped_count = {}
@@ -279,8 +281,10 @@ class BinReadAnalyzer:
             if col != "chr" and col != "bin" and "cig_filt" not in col:
                 # creates an element of the dictionary [sample_name]: r_vector_of_counts
                 read_counts_edger[col] = robjects.IntVector(self.read_counts[col])
+                # print(read_counts_edger[col])
 
             elif "cig_filt" in col:
+                # print(list(read_counts[col]))
                 clipped_count[col] = self.read_counts[col]
 
             else:
@@ -302,7 +306,12 @@ class BinReadAnalyzer:
 
         norm_counts_df = pd.DataFrame(norm_counts_dict)
         # pandas data frame of normalized counts
-        norm_counts_df = pd.concat([self.read_counts["chr"], self.read_counts['bin'], norm_counts_df], axis=1)
+        norm_counts_df = pd.concat([self.read_counts["chr"], self.read_counts["bin"], norm_counts_df], axis=1)
+
+        # to transform float counts, that are not truthful for read counts, into integers
+        for col in norm_counts_df:
+            if col != "chr" and col != "bin":
+                norm_counts_df[[col]] = norm_counts_df[[col]].astype(int)
 
         log_norm_counts_df = pd.DataFrame(log_norm_counts_dict)
         # pandas data frame of log normalized counts (to be used in fold change calc)
@@ -330,6 +339,11 @@ class BinReadAnalyzer:
 
         norm_clip_df = pd.DataFrame(norm_clip)
         norm_clip_df = pd.concat([self.read_counts["chr"], self.read_counts["bin"], norm_clip_df], axis=1)
+
+        for col in norm_clip_df:
+            if col != "chr" and col != "bin":
+                norm_clip_df[[col]] = norm_clip_df[[col]].astype(int)
+
         log_norm_clip_df = pd.DataFrame(log_norm_clip)
         log_norm_clip_df = pd.concat([self.read_counts["chr"], self.read_counts['bin'], log_norm_clip_df], axis=1)
 
@@ -377,6 +391,7 @@ class BinReadAnalyzer:
             fc_clip_df = pd.DataFrame(fc_clipped_counts)
 
             self.set_fold_change(fc_df)
+            print(fc_df)
             self.set_clipped_fold_change(fc_clip_df)
 
             return self.fold_change, self.clipped_fold_change
@@ -560,14 +575,23 @@ class BinReadAnalyzer:
         sig_df = pd.concat([self.sig_bins, self.sig_clip_bins])
         sig_df = sig_df.sort_values(by=["clone_name", "chr", "start_pos"])
 
-        header = "# Chromosome positions in which fold-change is > " + str(fc) + \
-                 " or < -" + str(fc) + " with respect to : " + control_name + "\n"
+        nosig_df = pd.concat([self.nosig_bins, self.nosig_clip_bins])
+        nosig_df = nosig_df.sort_values(by=["clone_name", "chr", "start_pos"])
 
+        header = "# Chromosome positions in which fold-change is > " + str(fc) + \
+                 " or < -" + str(fc) + " with respect to: " + control_name + "\n"
         with open(file_output_path + "BRAN" + str(self.bin_size) + "_significant_changes_regions.tsv", "w") as file:
             file.write(header)
             sig_df.to_csv(path_or_buf=file, sep="\t", index=False)
 
-        print(sig_df)
+        nosig_header = "# Chromosome positions in which fold-change is between the two thresholds of " + str(fc) + \
+                       " / " + str(fc) + " respect to: " + control_name + "\n"
+        with open(file_output_path + "BRAN" + str(self.bin_size) + "_NOT_significant_changes_regions.tsv", "w") as file:
+            file.write(nosig_header)
+            nosig_df.to_csv(path_or_buf=file, sep="\t", index=False)
+
+        print("\nSignificant changes regions\n", sig_df)
+        print("\nNOT significant changes regions\n", nosig_df)
 
     def plot(self, saving_folder, saving_format, cigar, unmapped, ref_genome, fc, pairwise, control_name, violin_bar,
              scatter, fold_change_pl, chr_name=None, sample=None):
@@ -934,12 +958,12 @@ if __name__ == "__main__":
             # exit(1)
             analyzer.normalize_bins(args.control_name)
             analyzer.calc_fold_change(args.control_name, args.pairwise)
-            analyzer.summary_sig_bins(args.fold_change)
-#             analyzer.output_sig_positions(args.fold_change, args.control_name, args.saving_folder)
-#             analyzer.plot(plots_folder, args.saving_format, args.cigar,
-#                           args.unmapped, args.reference, args.fold_change, args.pairwise, args.control_name,
-#                           args.violin_bar, args.scatter, args.fold_change_pl, chr_name=args.chromosome,
-#                           sample=args.sample)
+            analyzer.summary_sig_bins(args.fold_change, args.control_name)
+            analyzer.output_sig_positions(args.fold_change, args.control_name, args.saving_folder)
+            analyzer.plot(plots_folder, args.saving_format, args.cigar,
+                          args.unmapped, args.reference, args.fold_change, args.pairwise, args.control_name,
+                          args.violin_bar, args.scatter, args.fold_change_pl, chr_name=args.chromosome,
+                          sample=args.sample)
 #         else:
 #             print("Argument '-co/--control_name' not passed, "
 #                   "it has to be passed in order for fold_change to be calculated")
