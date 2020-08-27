@@ -329,7 +329,8 @@ class BinReadAnalyzer:
             read_counts_col = col[:col.find("_cig_filt")]
             norm_clip[col] = clipped_count_df[col] / (sum(self.read_counts[read_counts_col]) / 1000000)
             log_norm_clip[col] = []
-            for row in clipped_count_df[col]:
+            for row in norm_clip[col]:  # this line caused the wrong calculation of fold change in clipped counts,
+                # norm_clip is the correct structure on which iterate and not clipped_count_df
                 if row == 0:
                     log_norm_clip[col].append(0)
                 else:
@@ -948,6 +949,12 @@ if __name__ == "__main__":
                                unmapped=args.unmapped,
                                verbose=True)
 
+            if not os.path.exists(args.saving_folder):
+                print("\nargs.saving_folder path actually not present. The new folder path has been created\n")
+                os.mkdir(args.saving_folder)
+            else:
+                pass
+
             plots_folder = "{}/plots/{}/".format(args.saving_folder, str(args.bin_size))
             if not os.path.exists(plots_folder):
                 os.mkdir(plots_folder)
@@ -967,4 +974,4 @@ if __name__ == "__main__":
 #         else:
 #             print("Argument '-co/--control_name' not passed, "
 #                   "it has to be passed in order for fold_change to be calculated")
-# # version 29/06/2020
+# # version 27/08/2020

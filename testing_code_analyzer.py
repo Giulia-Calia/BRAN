@@ -348,7 +348,8 @@ class TestingBinReadAnalyzer:
             read_counts_col = col[:col.find("_cig_filt")]
             norm_clip[col] = clipped_count_df[col] / (sum(self.read_counts[read_counts_col]) / 1000000)
             log_norm_clip[col] = []
-            for row in clipped_count_df[col]:
+            for row in norm_clip[col]:  # this line caused the wrong calculation of fold change in clipped counts,
+                # norm_clip is the correct structure on which iterate and not clipped_count_df
                 if row == 0:
                     log_norm_clip[col].append(0)
                 else:
@@ -362,7 +363,7 @@ class TestingBinReadAnalyzer:
         for col in norm_clip_df:
             if col != "chr" and col != "bin":
                 norm_clip_df[[col]] = norm_clip_df[[col]].astype(int)
-                # print(norm_clip_df[col])
+                print(norm_clip_df[col])
 
         log_norm_clip_df = pd.DataFrame(log_norm_clip)
         log_norm_clip_df = pd.concat([self.read_counts["chr"], self.read_counts['bin'], log_norm_clip_df], axis=1)
@@ -382,6 +383,10 @@ class TestingBinReadAnalyzer:
         # print("norm_chr4_df")
         # norm_4 = norm_clip_df[norm_clip_df["chr"] == "CH.chr4"]
         # print(norm_4[norm_4["bin"] == [2, 3]])
+        norm_counts_df.to_csv("./norm_counts.tsv", sep="\t")
+        norm_clip_df.to_csv("./norm_clipped_counts.tsv", sep="\t")
+        log_norm_counts_df.to_csv("./log_norm_counts.tsv", sep="\t")
+        log_norm_clip_df.to_csv("./log_norm_clipped_counts.tsv", sep="\t")
         return self.norm, self.log_norm, self.norm_clip, self.log_norm_clip, self.norm_unmapped
 
     def calc_fold_change(self, control_name, pairwise=False):
@@ -429,8 +434,9 @@ class TestingBinReadAnalyzer:
             # print(fc_df.columns)
             # print(fc_clip_df.columns)
             self.set_fold_change(fc_df)
-            print(fc_df.columns)
+            fc_df.to_csv("./fc_values.tsv", sep="\t")
             self.set_clipped_fold_change(fc_clip_df)
+            fc_clip_df.to_csv("./clipped_fc_values.tsv", sep="\t")
 
             return self.fold_change, self.clipped_fold_change
 
