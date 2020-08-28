@@ -276,7 +276,7 @@ class TestingBinReadAnalyzer:
         # sorted_df.to_csv(saving_folder + "sorted_df.txt", sep="\t")
         return self.read_counts
 
-    def normalize_bins(self, control_name):
+    def normalize_bins(self, control_name, saving_folder):
         """This method handles the normalization of the raw read_counts
         using an R package, edgeR, imported thanks to rpy2 that provides
         an already implemented function, cpm, for the normalization of a
@@ -350,7 +350,8 @@ class TestingBinReadAnalyzer:
             log_norm_clip[col] = []
             for row in norm_clip[col]:  # this line caused the wrong calculation of fold change in clipped counts,
                 # norm_clip is the correct structure on which iterate and not clipped_count_df
-                if row == 0:
+                if row == 0:  # int is useful to avoid that bin with norm count at 0.07... are considered as
+                    # significant in fold change calculation with respect to a 0 count in the reference
                     log_norm_clip[col].append(0)
                 else:
                     log_norm_clip[col].append(math.log2(row))
@@ -360,10 +361,10 @@ class TestingBinReadAnalyzer:
         norm_clip_df = pd.DataFrame(norm_clip)
         norm_clip_df = pd.concat([self.read_counts["chr"], self.read_counts["bin"], norm_clip_df], axis=1)
 
-        for col in norm_clip_df:
-            if col != "chr" and col != "bin":
-                norm_clip_df[[col]] = norm_clip_df[[col]].astype(int)
-                print(norm_clip_df[col])
+        # for col in norm_clip_df:
+        #     if col != "chr" and col != "bin":
+        #         norm_clip_df[[col]] = norm_clip_df[[col]].astype(int)
+        #         print(norm_clip_df[col])
 
         log_norm_clip_df = pd.DataFrame(log_norm_clip)
         log_norm_clip_df = pd.concat([self.read_counts["chr"], self.read_counts['bin'], log_norm_clip_df], axis=1)
@@ -383,10 +384,10 @@ class TestingBinReadAnalyzer:
         # print("norm_chr4_df")
         # norm_4 = norm_clip_df[norm_clip_df["chr"] == "CH.chr4"]
         # print(norm_4[norm_4["bin"] == [2, 3]])
-        norm_counts_df.to_csv("./norm_counts.tsv", sep="\t")
-        norm_clip_df.to_csv("./norm_clipped_counts.tsv", sep="\t")
-        log_norm_counts_df.to_csv("./log_norm_counts.tsv", sep="\t")
-        log_norm_clip_df.to_csv("./log_norm_clipped_counts.tsv", sep="\t")
+        norm_counts_df.to_csv(saving_folder + "norm_counts.tsv", sep="\t")
+        norm_clip_df.to_csv(saving_folder + "float_norm_clipped_counts.tsv", sep="\t")
+        log_norm_counts_df.to_csv(saving_folder + "log_norm_counts.tsv", sep="\t")
+        log_norm_clip_df.to_csv(saving_folder + "log_norm_clipped_counts.tsv", sep="\t")
         return self.norm, self.log_norm, self.norm_clip, self.log_norm_clip, self.norm_unmapped
 
     def calc_fold_change(self, control_name, pairwise=False):
@@ -995,7 +996,7 @@ if __name__ == "__main__":
             analyzer.sorted_df(args.saving_folder)
 
             # exit(1)
-            analyzer.normalize_bins(args.control_name)
+            analyzer.normalize_bins(args.control_name, args.saving_folder)
             analyzer.calc_fold_change(args.control_name, args.pairwise)
             analyzer.summary_sig_bins(args.fold_change, args.control_name)
             analyzer.output_sig_positions(args.fold_change, args.control_name, args.saving_folder)
