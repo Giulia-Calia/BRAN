@@ -114,7 +114,7 @@ class BinReadAnalyzer:
     def set_read_counts(self, sort_read_counts):
         self.read_counts = sort_read_counts
 
-    def set_norm(self, norm):
+    def set_norm_dfs(self, norm):
         """set norm counts from normalization function"""
         self.norm = norm
 
@@ -258,6 +258,29 @@ class BinReadAnalyzer:
         self.set_read_counts(sorted_df)
         return self.read_counts
 
+    def norm_structures(self, counts_edger):
+
+        counts_edger_df = robjects.DataFrame(counts_edger)  # R data frame of raw counts
+        norm_counts = edger.cpm(counts_edger_df, normalized_lib_sizes=True)  # R object of norm counts
+        log_norm_counts = edger.cpm(counts_edger_df, log=True)  # R object of log norm counts
+
+        # in order to pass from an R dataframe to a python dataframe in the most secure way, the R structure has to
+        # be decomposed and recomposed into the python one
+        norm_dict = {}
+        log_norm_dict = {}
+        for i in range(1, norm_counts.ncol + 1):
+            norm_dict[norm_counts.colnames[i - 1]] = list(norm_counts.rx(True, i))
+            log_norm_dict[log_norm_counts.colnames[i - 1]] = list(log_norm_counts.rx(True, i))
+
+        return self.norm_dfs(norm_dict), self.norm_dfs(log_norm_dict)
+
+    def norm_dfs(self, counts_dict):
+        # pandas data frame of normalized counts
+        counts_df = pd.DataFrame(counts_dict)
+        counts_df = pd.concat([self.read_counts["chr"], self.read_counts["bin"], counts_df], axis=1)
+
+        return counts_df
+
     def normalize_bins(self, control_name):
         """This method handles the normalization of the raw read_counts
         using an R package, edgeR, imported thanks to rpy2 that provides
@@ -267,10 +290,11 @@ class BinReadAnalyzer:
         manually"""
         # self.read_counts.to_csv(str(self.bin_size) + "_norm_counts_check.txt", sep="\t")
         # read_counts = self.no_repeats_df_transformation()
-        # the edgeR package is imported using rpy2 syntax to access to all its built-in functions
-        read_counts_edger = {}  # a dictionary of sample: vector_of_counts to work with edger
-        clipped_count = {}
 
+        # the edgeR package is imported using rpy2 syntax to access to all its built-in functions
+
+        read_counts_edger = {}  # a dictionary of sample: vector_of_counts to work with edger
+        clipped_counts_edger = {}
         print("\n")
         print("Normalization process:\n")
 
@@ -281,73 +305,22 @@ class BinReadAnalyzer:
             if col != "chr" and col != "bin" and "cig_filt" not in col:
                 # creates an element of the dictionary [sample_name]: r_vector_of_counts
                 read_counts_edger[col] = robjects.IntVector(self.read_counts[col])
-                # print(read_counts_edger[col])
 
             elif "cig_filt" in col:
-                # print(list(read_counts[col]))
-                clipped_count[col] = self.read_counts[col]
-
+                clipped_counts_edger[col] = robjects.IntVector(self.read_counts[col])
             else:
                 continue
 
             update_bar += 1
             norm_bar.update(update_bar)
 
-        read_counts_edger_df = robjects.DataFrame(read_counts_edger)  # R data frame of raw counts
-        norm_counts = edger.cpm(read_counts_edger_df, normalized_lib_sizes=True)  # R object of norm counts
-        log_norm_counts = edger.cpm(read_counts_edger_df, log=True)  # R object of log norm counts
-
-        norm_counts_dict = {}
-        log_norm_counts_dict = {}
-
-        for i in range(1, norm_counts.ncol + 1):
-            norm_counts_dict[norm_counts.colnames[i - 1]] = list(norm_counts.rx(True, i))
-            log_norm_counts_dict[log_norm_counts.colnames[i - 1]] = list(log_norm_counts.rx(True, i))
-
-        norm_counts_df = pd.DataFrame(norm_counts_dict)
-        # pandas data frame of normalized counts
-        norm_counts_df = pd.concat([self.read_counts["chr"], self.read_counts["bin"], norm_counts_df], axis=1)
-
-        # to transform float counts, that are not truthful for read counts, into integers
-        for col in norm_counts_df:
-            if col != "chr" and col != "bin":
-                norm_counts_df[[col]] = norm_counts_df[[col]].astype(int)
-
-        log_norm_counts_df = pd.DataFrame(log_norm_counts_dict)
-        # pandas data frame of log normalized counts (to be used in fold change calc)
-        log_norm_counts_df = pd.concat([self.read_counts["chr"], self.read_counts['bin'], log_norm_counts_df], axis=1)
-
+        norm_counts_df = self.norm_structures(read_counts_edger)[0]
+        log_norm_counts_df = self.norm_structures(read_counts_edger)[1]
         self.set_norm(norm_counts_df)
         self.set_log_norm(log_norm_counts_df)
 
-        clipped_count_df = pd.DataFrame(clipped_count)  # clipped_count filled before
-        norm_clip = {}
-        log_norm_clip = {}
-
-        for col in clipped_count_df:
-            # for normalization scope (dividing by the sum(counts) of sample of interest)
-            read_counts_col = col[:col.find("_cig_filt")]
-            norm_clip[col] = clipped_count_df[col] / (sum(self.read_counts[read_counts_col]) / 1000000)
-            log_norm_clip[col] = []
-            for row in norm_clip[col]:  # this line caused the wrong calculation of fold change in clipped counts,
-                # norm_clip is the correct structure on which iterate and not clipped_count_df
-                if row == 0:
-                    log_norm_clip[col].append(0)
-                else:
-                    log_norm_clip[col].append(math.log2(row))
-            update_bar += 1
-            norm_bar.update(update_bar)
-
-        norm_clip_df = pd.DataFrame(norm_clip)
-        norm_clip_df = pd.concat([self.read_counts["chr"], self.read_counts["bin"], norm_clip_df], axis=1)
-
-        for col in norm_clip_df:
-            if col != "chr" and col != "bin":
-                norm_clip_df[[col]] = norm_clip_df[[col]].astype(int)
-
-        log_norm_clip_df = pd.DataFrame(log_norm_clip)
-        log_norm_clip_df = pd.concat([self.read_counts["chr"], self.read_counts['bin'], log_norm_clip_df], axis=1)
-
+        norm_clip_df = self.norm_structures(clipped_counts_edger)[0]
+        log_norm_clip_df = self.norm_structures(clipped_counts_edger)[1]
         self.set_norm_clip(norm_clip_df)
         self.set_log_norm_clip(log_norm_clip_df)
 
@@ -359,6 +332,12 @@ class BinReadAnalyzer:
             norm_bar.update(update_bar)
 
         self.set_norm_unmapped(norm_unmapped)
+        # -----------uncomment to have files for a check on the normalization results--------------------
+        # norm_counts_df.to_csv(saving_folder + "norm_mod_float_counts.tsv", sep="\t")
+        # norm_clip_df.to_csv(saving_folder + "norm_mod_float_norm_clipped_counts.tsv", sep="\t")
+        # log_norm_counts_df.to_csv(saving_folder + "norm_mod_log_norm_counts.tsv", sep="\t")
+        # log_norm_clip_df.to_csv(saving_folder + "norm_mod_log_norm_clipped_counts.tsv", sep="\t")
+        # -----------------------------------------------------------------------------------------------
         return self.norm, self.log_norm, self.norm_clip, self.log_norm_clip, self.norm_unmapped
 
     def calc_fold_change(self, control_name, pairwise=False):
@@ -971,7 +950,7 @@ if __name__ == "__main__":
                           args.unmapped, args.reference, args.fold_change, args.pairwise, args.control_name,
                           args.violin_bar, args.scatter, args.fold_change_pl, chr_name=args.chromosome,
                           sample=args.sample)
-#         else:
-#             print("Argument '-co/--control_name' not passed, "
-#                   "it has to be passed in order for fold_change to be calculated")
+        else:
+            print("Argument '-co/--control_name' not passed, "
+                  "it has to be passed in order for fold_change to be calculated")
 # # version 27/08/2020

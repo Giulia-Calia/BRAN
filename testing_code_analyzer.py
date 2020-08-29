@@ -276,6 +276,29 @@ class TestingBinReadAnalyzer:
         # sorted_df.to_csv(saving_folder + "sorted_df.txt", sep="\t")
         return self.read_counts
 
+    def norm_structures(self, counts_edger):
+
+        counts_edger_df = robjects.DataFrame(counts_edger)  # R data frame of raw counts
+        norm_counts = edger.cpm(counts_edger_df, normalized_lib_sizes=True)  # R object of norm counts
+        log_norm_counts = edger.cpm(counts_edger_df, log=True)  # R object of log norm counts
+
+        # in order to pass from an R dataframe to a python dataframe in the most secure way, the R structure has to
+        # be decomposed and recomposed into the python one
+        norm_dict = {}
+        log_norm_dict = {}
+        for i in range(1, norm_counts.ncol + 1):
+            norm_dict[norm_counts.colnames[i - 1]] = list(norm_counts.rx(True, i))
+            log_norm_dict[log_norm_counts.colnames[i - 1]] = list(log_norm_counts.rx(True, i))
+
+        return self.norm_dfs(norm_dict), self.norm_dfs(log_norm_dict)
+
+    def norm_dfs(self, counts_dict):
+        # pandas data frame of normalized counts
+        counts_df = pd.DataFrame(counts_dict)
+        counts_df = pd.concat([self.read_counts["chr"], self.read_counts["bin"], counts_df], axis=1)
+
+        return counts_df
+
     def normalize_bins(self, control_name, saving_folder):
         """This method handles the normalization of the raw read_counts
         using an R package, edgeR, imported thanks to rpy2 that provides
@@ -305,60 +328,81 @@ class TestingBinReadAnalyzer:
                 # print(list(read_counts[col]))
                 # clipped_count[col] = self.read_counts[col]
                 clipped_counts_edger[col] = robjects.IntVector(self.read_counts[col])
-                print("sum {}: {}".format(col, sum(self.read_counts[col])))
-                if "Ch15_2" in col:
-                    print("clipped {} raw counts\n{}".format(col, self.read_counts[col]))
             else:
                 continue
 
             update_bar += 1
             norm_bar.update(update_bar)
-        # print(clipped_counts_edger)
-        read_counts_edger_df = robjects.DataFrame(read_counts_edger)  # R data frame of raw counts
-        norm_counts = edger.cpm(read_counts_edger_df, normalized_lib_sizes=True)  # R object of norm counts
-        log_norm_counts = edger.cpm(read_counts_edger_df, log=True)  # R object of log norm counts
 
-        norm_counts_dict = {}
-        log_norm_counts_dict = {}
-
-        clipped_counts_edger_df = robjects.DataFrame(clipped_counts_edger)
-        norm_clipped_counts = edger.cpm(clipped_counts_edger_df, normalized_lib_sizes=True)
-        log_norm_clipped_counts = edger.cpm(clipped_counts_edger_df, log=True)
-
-        norm_clipped_dict = {}
-        log_norm_clipped_dict = {}
-
-        for i in range(1, norm_counts.ncol + 1):
-            norm_counts_dict[norm_counts.colnames[i - 1]] = list(norm_counts.rx(True, i))
-            log_norm_counts_dict[log_norm_counts.colnames[i - 1]] = list(log_norm_counts.rx(True, i))
-
-        for j in range(1, norm_clipped_counts.ncol + 1):
-            norm_clipped_dict[norm_clipped_counts.colnames[j - 1]] = list(norm_clipped_counts.rx(True, j))
-            log_norm_clipped_dict[norm_clipped_counts.colnames[j - 1]] = list(log_norm_clipped_counts.rx(True, j))
-
-        norm_counts_df = pd.DataFrame(norm_counts_dict)
-        # pandas data frame of normalized counts
-        norm_counts_df = pd.concat([self.read_counts["chr"], self.read_counts["bin"], norm_counts_df], axis=1)
-
-        norm_clipped_counts_df = pd.DataFrame(norm_clipped_dict)
-        norm_clipped_counts_df = pd.concat([self.read_counts["chr"], self.read_counts["bin"], norm_clipped_counts_df],
-                                           axis=1)
-        # print(norm_clipped_counts_df)
-        # to transform float counts, that are not truthful for read counts, into integers
-        for col in norm_counts_df:
-            if col != "chr" and col != "bin":
-                norm_counts_df[[col]] = norm_counts_df[[col]].astype(int)
-
-        log_norm_counts_df = pd.DataFrame(log_norm_counts_dict)
-        # pandas data frame of log normalized counts (to be used in fold change calc)
-        log_norm_counts_df = pd.concat([self.read_counts["chr"], self.read_counts['bin'], log_norm_counts_df], axis=1)
-
+        norm_counts_df = self.norm_structures(read_counts_edger)[0]
+        log_norm_counts_df = self.norm_structures(read_counts_edger)[1]
         self.set_norm(norm_counts_df)
         self.set_log_norm(log_norm_counts_df)
+
+        norm_clip_df = self.norm_structures(clipped_counts_edger)[0]
+        log_norm_clip_df = self.norm_structures(clipped_counts_edger)[1]
+        self.set_norm_clip(norm_clip_df)
+        self.set_log_norm_clip(log_norm_clip_df)
+
+        unmapped = self.parameters["unmapped_reads"]
+        norm_unmapped = {}
+        for u in unmapped:
+            norm_unmapped[u] = unmapped[u] / (sum(self.read_counts[u]) / 1000000)
+            update_bar += 1
+            norm_bar.update(update_bar)
+
+        self.set_norm_unmapped(norm_unmapped)
+
+        # -----------uncomment to have files for a check on the normalization results--------------------
+        # norm_counts_df.to_csv(saving_folder + "norm_mod_float_counts.tsv", sep="\t")
+        # norm_clip_df.to_csv(saving_folder + "norm_mod_float_norm_clipped_counts.tsv", sep="\t")
+        # log_norm_counts_df.to_csv(saving_folder + "norm_mod_log_norm_counts.tsv", sep="\t")
+        # log_norm_clip_df.to_csv(saving_folder + "norm_mod_log_norm_clipped_counts.tsv", sep="\t")
+
+        # print(clipped_counts_edger)
+        # read_counts_edger_df = robjects.DataFrame(read_counts_edger)  # R data frame of raw counts
+        # norm_counts = edger.cpm(read_counts_edger_df, normalized_lib_sizes=True)  # R object of norm counts
+        # log_norm_counts = edger.cpm(read_counts_edger_df, log=True)  # R object of log norm counts
+        #
+        # norm_counts_dict = {}
+        # log_norm_counts_dict = {}
+        #
+        # clipped_counts_edger_df = robjects.DataFrame(clipped_counts_edger)
+        # norm_clipped_counts = edger.cpm(clipped_counts_edger_df, normalized_lib_sizes=True)
+        # log_norm_clipped_counts = edger.cpm(clipped_counts_edger_df, log=True)
+        #
+        # norm_clipped_dict = {}
+        # log_norm_clipped_dict = {}
+        #
+        # for i in range(1, norm_counts.ncol + 1):
+        #     norm_counts_dict[norm_counts.colnames[i - 1]] = list(norm_counts.rx(True, i))
+        #     log_norm_counts_dict[log_norm_counts.colnames[i - 1]] = list(log_norm_counts.rx(True, i))
+        #
+        # for j in range(1, norm_clipped_counts.ncol + 1):
+        #     norm_clipped_dict[norm_clipped_counts.colnames[j - 1]] = list(norm_clipped_counts.rx(True, j))
+        #     log_norm_clipped_dict[norm_clipped_counts.colnames[j - 1]] = list(log_norm_clipped_counts.rx(True, j))
+        #
+        # norm_counts_df = pd.DataFrame(norm_counts_dict)
+        # # pandas data frame of normalized counts
+        # norm_counts_df = pd.concat([self.read_counts["chr"], self.read_counts["bin"], norm_counts_df], axis=1)
+        #
+        # norm_clipped_counts_df = pd.DataFrame(norm_clipped_dict)
+        # norm_clipped_counts_df = pd.concat([self.read_counts["chr"], self.read_counts["bin"], norm_clipped_counts_df],
+        #                                    axis=1)
+        # # print(norm_clipped_counts_df)
+        # # to transform float counts, that are not truthful for read counts, into integers
+        # for col in norm_counts_df:
+        #     if col != "chr" and col != "bin":
+        #         norm_counts_df[[col]] = norm_counts_df[[col]].astype(int)
+        #
+        # log_norm_counts_df = pd.DataFrame(log_norm_counts_dict)
+        # # pandas data frame of log normalized counts (to be used in fold change calc)
+        # log_norm_counts_df = pd.concat([self.read_counts["chr"], self.read_counts['bin'], log_norm_counts_df], axis=1)
+
         # print(self.norm)
 
-        log_norm_clip_df = pd.DataFrame(log_norm_clipped_dict)
-        log_norm_clip_df = pd.concat([self.read_counts["chr"], self.read_counts['bin'], log_norm_clip_df], axis=1)
+        # log_norm_clip_df = pd.DataFrame(log_norm_clipped_dict)
+        # log_norm_clip_df = pd.concat([self.read_counts["chr"], self.read_counts['bin'], log_norm_clip_df], axis=1)
 
         # clipped_count_df = pd.DataFrame(clipped_count)  # clipped_count filled before
         # norm_clip = {}
@@ -390,25 +434,7 @@ class TestingBinReadAnalyzer:
         # log_norm_clip_df = pd.DataFrame(log_norm_clip)
         # log_norm_clip_df = pd.concat([self.read_counts["chr"], self.read_counts['bin'], log_norm_clip_df], axis=1)
         #
-        self.set_norm_clip(norm_clipped_counts_df)
-        # print(norm_clip_df)
-        self.set_log_norm_clip(log_norm_clip_df)
 
-        unmapped = self.parameters["unmapped_reads"]
-        norm_unmapped = {}
-        for u in unmapped:
-            norm_unmapped[u] = unmapped[u] / (sum(self.read_counts[u]) / 1000000)
-            update_bar += 1
-            norm_bar.update(update_bar)
-
-        self.set_norm_unmapped(norm_unmapped)
-        # print("norm_chr4_df")
-        # norm_4 = norm_clip_df[norm_clip_df["chr"] == "CH.chr4"]
-        # print(norm_4[norm_4["bin"] == [2, 3]])
-        # norm_counts_df.to_csv(saving_folder + "aft_error_norm_counts.tsv", sep="\t")
-        # norm_clipped_counts_df.to_csv(saving_folder + "after_error_float_norm_clipped_counts.tsv", sep="\t")
-        # log_norm_counts_df.to_csv(saving_folder + "after_error_log_norm_counts.tsv", sep="\t")
-        # log_norm_clip_df.to_csv(saving_folder + "after_error_log_norm_clipped_counts.tsv", sep="\t")
         return self.norm, self.log_norm, self.norm_clip, self.log_norm_clip, self.norm_unmapped
 
     def calc_fold_change(self, control_name, pairwise=False):
@@ -488,6 +514,19 @@ class TestingBinReadAnalyzer:
 
     # def summary_data_structure(self, data_dict, chr_val=(), str_val=(), end_val=(), count_val=(), cont_val=(), cl_name=(),
     #                            type_val=(), fc_sign=()):
+
+    # def sig_and_nosig_data(self, reads_fold_change, control_name, fc):
+    #
+    #     for col in reads_fold_change:
+    #         if col != "chr" and col != "bin" and col != control_name and "-" + control_name in col:
+    #             sig_data_pos = self.fold_change[self.fold_change[col] > fc]
+    #             sig_data_neg = self.fold_change[self.fold_change[col] < -fc]
+    #             sig_data = pd.concat([sig_data_pos, sig_data_neg])
+    #             nosig_data = self.fold_change.drop(sig_data.index)
+    #
+    #             return sig_data, nosig_data
+    #
+    # def summary_fill_dict(self, sig_data, nosig_data, ):
 
     def summary_sig_bins(self, fc, control_name, saving_folder):
         # dataframe for information on significant BINS
