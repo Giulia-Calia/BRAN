@@ -807,44 +807,44 @@ class TestingBinReadVisualizer:
             fig.add_trace(go.Scatter(x=x_sig,
                                      y=y_sig,
                                      mode="markers",
-                                     hovertext=hover_sig,
-                                     text=text_sig,
+                                     text=text_sig,  # chromosome position
+                                     hovertext=hover_sig,  # bin chromosome position
                                      hovertemplate="<b>%{text}</b>" +
                                                    "<br>Chrom_position</b>: %{hovertext:,}" +
-                                                   "<br>Count: %{y}",
+                                                   "<br>FC: %{y}",
                                      name=trace_name))
 
             fig.add_trace(go.Scatter(x=x_no_sig,
                                      y=y_no_sig,
                                      mode="markers",
                                      opacity=0.1,
-                                     hovertext=hover_no_sig,
                                      text=text_no_sig,
+                                     hovertext=hover_no_sig,
                                      hovertemplate="<b>%{text}</b>" +
                                                    "<br>Chrom_position</b>: %{hovertext:,}" +
-                                                   "<br>Count: %{y}",
+                                                   "<br>FC: %{y}",
                                      name=trace_name + "_<b>not_significant</b>"))
 
         else:
             fig.add_trace(go.Scatter(x=x_sig,
                                      y=y_sig,
                                      mode="markers",
-                                     hovertext=hover_sig,
                                      text=text_sig,
+                                     hovertext=hover_sig,
                                      hovertemplate="<b>%{text}</b>" +
                                                    "<br>Chrom_position</b>: %{hovertext:,}" +
-                                                   "<br>Count: %{y}",
+                                                   "<br>FC: %{y}",
                                      name="Significant Differences"))
 
             fig.add_trace(go.Scatter(x=x_no_sig,
                                      y=y_no_sig,
                                      mode="markers",
                                      opacity=0.1,
-                                     hovertext=hover_no_sig,
                                      text=text_no_sig,
+                                     hovertext=hover_no_sig,
                                      hovertemplate="<b>%{text}</b>" +
                                                    "<br>Chrom_position</b>: %{hovertext:,}" +
-                                                   "<br>Count: %{y}",
+                                                   "<br>FC: %{y}",
                                      name="Not Significant Differences"))
 
     def fold_change_layout(self, fig, title):
@@ -896,7 +896,7 @@ class TestingBinReadVisualizer:
         self.add_threshold_fc(fig, fc, len(self.fold_change))
         self.plot_background(fig)
 
-        # fig.show()
+        fig.show()
 
         self.saving_plot(fig, description=description)
 
@@ -945,7 +945,7 @@ class TestingBinReadVisualizer:
         self.add_threshold_fc(fig, fc, len_x_axis=len(self.clip_fold_change))
         self.plot_background(fig)
 
-        fig.show()
+        # fig.show()
 
         self.saving_plot(fig, description=description)
 

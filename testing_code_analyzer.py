@@ -287,8 +287,8 @@ class TestingBinReadAnalyzer:
         # read_counts = self.no_repeats_df_transformation()
         # the edgeR package is imported using rpy2 syntax to access to all its built-in functions
         read_counts_edger = {}  # a dictionary of sample: vector_of_counts to work with edger
-        clipped_count = {}
-
+        # clipped_count = {}
+        clipped_counts_edger = {}
         print("\n")
         print("Normalization process:\n")
 
@@ -303,14 +303,17 @@ class TestingBinReadAnalyzer:
 
             elif "cig_filt" in col:
                 # print(list(read_counts[col]))
-                clipped_count[col] = self.read_counts[col]
-
+                # clipped_count[col] = self.read_counts[col]
+                clipped_counts_edger[col] = robjects.IntVector(self.read_counts[col])
+                print("sum {}: {}".format(col, sum(self.read_counts[col])))
+                if "Ch15_2" in col:
+                    print("clipped {} raw counts\n{}".format(col, self.read_counts[col]))
             else:
                 continue
 
             update_bar += 1
             norm_bar.update(update_bar)
-
+        # print(clipped_counts_edger)
         read_counts_edger_df = robjects.DataFrame(read_counts_edger)  # R data frame of raw counts
         norm_counts = edger.cpm(read_counts_edger_df, normalized_lib_sizes=True)  # R object of norm counts
         log_norm_counts = edger.cpm(read_counts_edger_df, log=True)  # R object of log norm counts
@@ -318,14 +321,29 @@ class TestingBinReadAnalyzer:
         norm_counts_dict = {}
         log_norm_counts_dict = {}
 
+        clipped_counts_edger_df = robjects.DataFrame(clipped_counts_edger)
+        norm_clipped_counts = edger.cpm(clipped_counts_edger_df, normalized_lib_sizes=True)
+        log_norm_clipped_counts = edger.cpm(clipped_counts_edger_df, log=True)
+
+        norm_clipped_dict = {}
+        log_norm_clipped_dict = {}
+
         for i in range(1, norm_counts.ncol + 1):
             norm_counts_dict[norm_counts.colnames[i - 1]] = list(norm_counts.rx(True, i))
             log_norm_counts_dict[log_norm_counts.colnames[i - 1]] = list(log_norm_counts.rx(True, i))
+
+        for j in range(1, norm_clipped_counts.ncol + 1):
+            norm_clipped_dict[norm_clipped_counts.colnames[j - 1]] = list(norm_clipped_counts.rx(True, j))
+            log_norm_clipped_dict[norm_clipped_counts.colnames[j - 1]] = list(log_norm_clipped_counts.rx(True, j))
 
         norm_counts_df = pd.DataFrame(norm_counts_dict)
         # pandas data frame of normalized counts
         norm_counts_df = pd.concat([self.read_counts["chr"], self.read_counts["bin"], norm_counts_df], axis=1)
 
+        norm_clipped_counts_df = pd.DataFrame(norm_clipped_dict)
+        norm_clipped_counts_df = pd.concat([self.read_counts["chr"], self.read_counts["bin"], norm_clipped_counts_df],
+                                           axis=1)
+        # print(norm_clipped_counts_df)
         # to transform float counts, that are not truthful for read counts, into integers
         for col in norm_counts_df:
             if col != "chr" and col != "bin":
@@ -339,37 +357,40 @@ class TestingBinReadAnalyzer:
         self.set_log_norm(log_norm_counts_df)
         # print(self.norm)
 
-        clipped_count_df = pd.DataFrame(clipped_count)  # clipped_count filled before
-        norm_clip = {}
-        log_norm_clip = {}
-
-        for col in clipped_count_df:
-            # for normalization scope (dividing by the sum(counts) of sample of interest)
-            read_counts_col = col[:col.find("_cig_filt")]
-            norm_clip[col] = clipped_count_df[col] / (sum(self.read_counts[read_counts_col]) / 1000000)
-            log_norm_clip[col] = []
-            for row in norm_clip[col]:  # this line caused the wrong calculation of fold change in clipped counts,
-                # norm_clip is the correct structure on which iterate and not clipped_count_df
-                if row == 0:  # int is useful to avoid that bin with norm count at 0.07... are considered as
-                    # significant in fold change calculation with respect to a 0 count in the reference
-                    log_norm_clip[col].append(0)
-                else:
-                    log_norm_clip[col].append(math.log2(row))
-            update_bar += 1
-            norm_bar.update(update_bar)
-
-        norm_clip_df = pd.DataFrame(norm_clip)
-        norm_clip_df = pd.concat([self.read_counts["chr"], self.read_counts["bin"], norm_clip_df], axis=1)
-
-        # for col in norm_clip_df:
-        #     if col != "chr" and col != "bin":
-        #         norm_clip_df[[col]] = norm_clip_df[[col]].astype(int)
-        #         print(norm_clip_df[col])
-
-        log_norm_clip_df = pd.DataFrame(log_norm_clip)
+        log_norm_clip_df = pd.DataFrame(log_norm_clipped_dict)
         log_norm_clip_df = pd.concat([self.read_counts["chr"], self.read_counts['bin'], log_norm_clip_df], axis=1)
 
-        self.set_norm_clip(norm_clip_df)
+        # clipped_count_df = pd.DataFrame(clipped_count)  # clipped_count filled before
+        # norm_clip = {}
+        # log_norm_clip = {}
+        #
+        # for col in clipped_count_df:
+        #     # for normalization scope (dividing by the sum(counts) of sample of interest)
+        #     read_counts_col = col[:col.find("_cig_filt")]
+        #     norm_clip[col] = clipped_count_df[col] / (sum(self.read_counts[read_counts_col]) / 1000000)
+        #     log_norm_clip[col] = []
+        #     for row in norm_clip[col]:  # this line caused the wrong calculation of fold change in clipped counts,
+        #         # norm_clip is the correct structure on which iterate and not clipped_count_df
+        #         if row == 0:  # int is useful to avoid that bin with norm count at 0.07... are considered as
+        #             # significant in fold change calculation with respect to a 0 count in the reference
+        #             log_norm_clip[col].append(0)
+        #         else:
+        #             log_norm_clip[col].append(math.log2(row))
+        #     update_bar += 1
+        #     norm_bar.update(update_bar)
+        #
+        # norm_clip_df = pd.DataFrame(norm_clip)
+        # norm_clip_df = pd.concat([self.read_counts["chr"], self.read_counts["bin"], norm_clip_df], axis=1)
+        #
+        # # for col in norm_clip_df:
+        # #     if col != "chr" and col != "bin":
+        # #         norm_clip_df[[col]] = norm_clip_df[[col]].astype(int)
+        # #         print(norm_clip_df[col])
+        #
+        # log_norm_clip_df = pd.DataFrame(log_norm_clip)
+        # log_norm_clip_df = pd.concat([self.read_counts["chr"], self.read_counts['bin'], log_norm_clip_df], axis=1)
+        #
+        self.set_norm_clip(norm_clipped_counts_df)
         # print(norm_clip_df)
         self.set_log_norm_clip(log_norm_clip_df)
 
@@ -384,10 +405,10 @@ class TestingBinReadAnalyzer:
         # print("norm_chr4_df")
         # norm_4 = norm_clip_df[norm_clip_df["chr"] == "CH.chr4"]
         # print(norm_4[norm_4["bin"] == [2, 3]])
-        norm_counts_df.to_csv(saving_folder + "norm_counts.tsv", sep="\t")
-        norm_clip_df.to_csv(saving_folder + "float_norm_clipped_counts.tsv", sep="\t")
-        log_norm_counts_df.to_csv(saving_folder + "log_norm_counts.tsv", sep="\t")
-        log_norm_clip_df.to_csv(saving_folder + "log_norm_clipped_counts.tsv", sep="\t")
+        # norm_counts_df.to_csv(saving_folder + "aft_error_norm_counts.tsv", sep="\t")
+        # norm_clipped_counts_df.to_csv(saving_folder + "after_error_float_norm_clipped_counts.tsv", sep="\t")
+        # log_norm_counts_df.to_csv(saving_folder + "after_error_log_norm_counts.tsv", sep="\t")
+        # log_norm_clip_df.to_csv(saving_folder + "after_error_log_norm_clipped_counts.tsv", sep="\t")
         return self.norm, self.log_norm, self.norm_clip, self.log_norm_clip, self.norm_unmapped
 
     def calc_fold_change(self, control_name, pairwise=False):
@@ -468,24 +489,25 @@ class TestingBinReadAnalyzer:
     # def summary_data_structure(self, data_dict, chr_val=(), str_val=(), end_val=(), count_val=(), cont_val=(), cl_name=(),
     #                            type_val=(), fc_sign=()):
 
-    def summary_sig_bins(self, fc, control_name):
+    def summary_sig_bins(self, fc, control_name, saving_folder):
         # dataframe for information on significant BINS
 
         summary_sig_clip_data = {"chr": [], "start_pos": [], "end_pos": [], "count": [], "control_count": [],
-                                 "clone_name": [], "type": [], "fc": []}
+                                 "clone_name": [], "type": [], "fc": [], "fc_values": []}
         summary_sig_data = {"chr": [], "start_pos": [], "end_pos": [], "count": [], "control_count": [],
-                            "clone_name": [], "type": [], "fc": []}
+                            "clone_name": [], "type": [], "fc": [], "fc_values": []}
 
         summary_nosig_data = {"chr": [], "start_pos": [], "end_pos": [], "count": [], "control_count": [],
-                              "clone_name": [], "type": [], "fc": []}
+                              "clone_name": [], "type": [], "fc": [], "fc_values": []}
         summary_nosig_clip_data = {"chr": [], "start_pos": [], "end_pos": [], "count": [], "control_count": [],
-                                   "clone_name": [], "type": [], "fc": []}
+                                   "clone_name": [], "type": [], "fc": [], "fc_values": []}
 
         for col in self.fold_change.columns:
             if col != "chr" and col != "bin" and col != control_name and "-" in col:
                 sig_data_pos = self.fold_change[self.fold_change[col] > fc]
                 sig_data_neg = self.fold_change[self.fold_change[col] < -fc]
                 sig_data = pd.concat([sig_data_pos, sig_data_neg])
+                print(sig_data)
                 nosig = self.fold_change.drop(sig_data.index)
                 # sig_data.to_csv("./" + col + ".tsv", sep="\t")
                 # nosig.to_csv("./" + col + "nosig.tsv", sep="\t")
@@ -507,6 +529,7 @@ class TestingBinReadAnalyzer:
                 # print(len(["read_count"] * len(sig_data)))
                 summary_sig_data["fc"] += list(["+"] * len(sig_data_pos) + ["-"] * len(sig_data_neg))
                 # print(len(["+"] * len(sig_data_pos) + ["-"] * len(sig_data_neg)))
+                summary_sig_data["fc_values"] += list(sig_data[col])
 
                 # print("NO SIG")
                 summary_nosig_data["chr"] += list(nosig["chr"])
@@ -525,6 +548,7 @@ class TestingBinReadAnalyzer:
                 # print(len(["read_count"] * len(nosig)))
                 summary_nosig_data["fc"] += list("n" * len(nosig))
                 # print(len(list("n" * len(nosig))))
+                summary_nosig_data["fc_values"] += list(nosig[col])
 
         sum_sig_bins = pd.DataFrame(summary_sig_data)
         sum_nosig_bins = pd.DataFrame(summary_nosig_data)
@@ -557,6 +581,7 @@ class TestingBinReadAnalyzer:
                 summary_sig_clip_data["type"] += ["clipped_count"] * len(sig_clip_data)
                 # print(len(["clipped_count"] * len(sig_clip_data)))
                 summary_sig_clip_data["fc"] += ["+"] * len(sig_clip_data_pos) + ["-"] * len(sig_clip_data_neg)
+                summary_sig_clip_data["fc_values"] += list(sig_clip_data[col])
 
                 summary_nosig_clip_data["chr"] += list(nosig_clip_data["chr"])
                 summary_nosig_clip_data["start_pos"] += (list(nosig_clip_data["bin"] * self.bin_size))
@@ -566,6 +591,7 @@ class TestingBinReadAnalyzer:
                 summary_nosig_clip_data["clone_name"] += [col.replace("_cig_filt", "")] * len(nosig_clip_data)
                 summary_nosig_clip_data["type"] += ["clipped_count"] * len(nosig_clip_data)
                 summary_nosig_clip_data["fc"] += list("n" * len(nosig_clip_data))
+                summary_nosig_clip_data["fc_values"] += list(nosig_clip_data[col])
 
         sum_sig_clip_bins = pd.DataFrame(summary_sig_clip_data)
         sum_nosig_clip_bins = pd.DataFrame(summary_nosig_clip_data)
@@ -580,6 +606,10 @@ class TestingBinReadAnalyzer:
         self.set_sig_clip_bins(sum_sig_clip_bins)
         self.set_no_sig_bins(sum_nosig_bins)
         self.set_no_sig_clip_bins(sum_nosig_clip_bins)
+        zero_nosig_pos = self.nosig_clip_bins[sum_nosig_clip_bins["fc_values"] < 0.0000]
+        zero_nosig_neg = self.nosig_clip_bins[sum_nosig_clip_bins["fc_values"] > -0.0000]
+        zero_nosig = pd.concat([zero_nosig_pos, zero_nosig_neg])
+        zero_nosig.to_csv(saving_folder + "zero_nosig.tsv", sep="\t")
         return self.sig_bins, self.sig_clip_bins, self.nosig_bins, self.nosig_clip_bins
 
     def add_ns_trace(self, fig, reference=None, chrom=None):
@@ -988,21 +1018,28 @@ if __name__ == "__main__":
                                unmapped=args.unmapped,
                                verbose=True)
 
-            plots_folder = "{}/plots/{}/".format(args.saving_folder, str(args.bin_size))
-            if not os.path.exists(plots_folder):
-                os.mkdir(plots_folder)
+            if not os.path.exists(args.saving_folder):
+                os.mkdir(args.saving_folder)
             else:
                 pass
+
+            plots_folder = "{}plots/{}/".format(args.saving_folder, str(args.bin_size))
+            os.makedirs(plots_folder, exist_ok=True)
+            # if not os.path.exists(plots_folder):
+            #     os.mkdir(plots_folder)
+            # else:
+            #     pass
             analyzer.sorted_df(args.saving_folder)
 
-            # exit(1)
             analyzer.normalize_bins(args.control_name, args.saving_folder)
+            exit(1)
             analyzer.calc_fold_change(args.control_name, args.pairwise)
-            analyzer.summary_sig_bins(args.fold_change, args.control_name)
+            analyzer.summary_sig_bins(args.fold_change, args.control_name, args.saving_folder)
             analyzer.output_sig_positions(args.fold_change, args.control_name, args.saving_folder)
             analyzer.plot(plots_folder, args.saving_format, args.cigar,
                           args.unmapped, args.reference, args.fold_change, args.pairwise, args.control_name,
-                          args.violin_bar, args.scatter, args.fold_change_pl, chr_name=args.chromosome, sample=args.sample)
+                          args.violin_bar, args.scatter, args.fold_change_pl, chr_name=args.chromosome,
+                          sample=args.sample)
         else:
             print("Argument '-co/--control_name' not passed, "
                   "it has to be passed in order for fold_change to be calculated")
