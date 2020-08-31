@@ -1196,3 +1196,39 @@ class TestingBinReadVisualizer:
         else:
             print("""ATTENTION: if parameter '-pw' not given, it's impossible to retrieve graphical information 
                   on single sample fold-change. \nPlease TRY AGAIN specifying '-pw' or '--pairwise' in command line""")
+
+    # TODO still to be decided if integrate it into the BRAN signal
+    # def add_ns_trace(self, fig, reference=None, chrom=None):
+    #     """This method is used in other plotting methods, in order to add the
+    #     representation of N bases in the same plot
+    #
+    #     Args:
+    #         reference (bool): true if the reference is declared
+    #         fig (obj): is a go.Figure() object, taken from the different plot
+    #                    methods, it represent the figure to which add the Ns
+    #                    representation
+    #         chrom (int): is a parameter of the script; it is different from None
+    #                     in those methods that uses this information to build up
+    #                     the plot
+    #
+    #     Returns:
+    #         A trace to add
+    #     """
+    #     if reference is not None:
+    #         count_N_df = self.parameters["n_counts"]  # second data structure
+    #         # if the chromosome is specified, the trace that could be added
+    #         # have to contain only N counts for that specific chromosome
+    #         if chrom is not None:
+    #             single_chrom_N = count_N_df[count_N_df["chr"] == "CH.chr" + str(chrom)]
+    #             return fig.add_trace(go.Scatter(x=single_chrom_N["index"],
+    #                                             y=single_chrom_N["N_count"],
+    #                                             mode="markers",
+    #                                             name="N_counts"))
+    #
+    #         else:
+    #             return fig.add_trace(go.Scatter(x=count_N_df["index"],
+    #                                             y=count_N_df["N_count"],
+    #                                             mode="markers",
+    #                                             name="N_counts"))
+    #     else:
+    #         print("Sorry, to add this trace to the plot, you have to specify the reference file name\nPlease try again")
