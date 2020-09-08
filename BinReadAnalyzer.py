@@ -114,7 +114,7 @@ class BinReadAnalyzer:
     def set_read_counts(self, sort_read_counts):
         self.read_counts = sort_read_counts
 
-    def set_norm_dfs(self, norm):
+    def set_norm(self, norm):
         """set norm counts from normalization function"""
         self.norm = norm
 
@@ -878,18 +878,25 @@ if __name__ == "__main__":
             else:
                 pass
 
-            plots_folder = "{}/plots/{}/".format(args.saving_folder, str(args.bin_size))
-            if not os.path.exists(plots_folder):
-                os.mkdir(plots_folder)
-            else:
-                pass
+            plots_folder = "{}plots/{}/".format(args.saving_folder, str(args.bin_size))
+            os.makedirs(plots_folder, exist_ok=True)
+            # if not os.path.exists(plots_folder):
+            #     os.mkdir(plots_folder)
+            # else:
+            #     pass
+            # plots_folder = "{}/plots/{}/".format(args.saving_folder, str(args.bin_size))
+            # if not os.path.exists(plots_folder):
+            #     os.mkdir(plots_folder)
+            # else:
+            #     pass
             analyzer.sorted_df(args.saving_folder)
 
             # exit(1)
             analyzer.normalize_bins(args.control_name)
             analyzer.calc_fold_change(args.control_name, args.pairwise)
-            analyzer.summary_sig_nosig_bins(args.fold_change, args.control_name)
+            analyzer.summary_sig_nosig_bins(args.fold_change, args.control_name, args.saving_folder)
             analyzer.output_sig_positions(args.fold_change, args.control_name, args.saving_folder)
+            # exit(1)
             analyzer.plot(plots_folder, args.saving_format, args.cigar,
                           args.unmapped, args.reference, args.fold_change, args.pairwise, args.control_name,
                           args.violin_bar, args.scatter, args.fold_change_pl, chr_name=args.chromosome,
@@ -897,4 +904,4 @@ if __name__ == "__main__":
         else:
             print("Argument '-co/--control_name' not passed, "
                   "it has to be passed in order for fold_change to be calculated")
-# # version 31/08/2020
+# # version 08/09/2020

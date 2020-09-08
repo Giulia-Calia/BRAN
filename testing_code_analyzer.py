@@ -71,6 +71,7 @@ def sorted_chromosomes(column):
     # regular expression used to retrieve chromosome number of type string and pass them to the converter
     alphanum_key = lambda key: [convert(c) for c in re.split('([0-9]+)', key)]  # any n. having digits from 0 to 9
     # as result a sorted list of chromosomes is returned applying the lambda functions above
+    # (chr1, chr2, chr3, ..., chr_n)
     return sorted(column, key=alphanum_key)
 
 
@@ -121,8 +122,8 @@ class TestingBinReadAnalyzer:
         self.clipped_fold_change = None
         self.sig_bins = None
         self.nosig_bins = None
-        self.sig_clip_bins = None
-        self.nosig_clip_bins = None
+        # self.sig_clip_bins = None
+        # self.nosig_clip_bins = None
 
     def set_parameters(self, param):
         """set parameters as actual parameters"""
@@ -166,12 +167,12 @@ class TestingBinReadAnalyzer:
     def set_no_sig_bins(self, no_sig_data):
         self.nosig_bins = pd.concat([no_sig_data])
 
-    def set_sig_clip_bins(self, sig_clip_data):
-        """set the data structure of significant clipped fold-change counts"""
-        self.sig_clip_bins = sig_clip_data
-
-    def set_no_sig_clip_bins(self, no_sig_clip_data):
-        self.nosig_clip_bins = pd.concat([no_sig_clip_data])
+    # def set_sig_clip_bins(self, sig_clip_data):
+    #     """set the data structure of significant clipped fold-change counts"""
+    #     self.sig_clip_bins = sig_clip_data
+    #
+    # def set_no_sig_clip_bins(self, no_sig_clip_data):
+    #     self.nosig_clip_bins = pd.concat([no_sig_clip_data])
 
     def load_data(self, cigar, cigar_filter=None, reference=None, read_info=None, unmapped=None,
                   verbose=False):
@@ -550,13 +551,14 @@ class TestingBinReadAnalyzer:
         # print(len(list(data[col[:col.find("-")]])))
         if clip:
             summary_dict["control_count"] += list(data[control_name + "_cig_filt"])
+            summary_dict["type"] += list(["clipped_count"] * len(data))
         else:
             summary_dict["control_count"] += list(data[control_name])
+            summary_dict["type"] += list(["read_count"] * len(data))
+            # print(len(["read_count"] * len(data)))
         # print(len(list(data[control_name])))
         summary_dict["clone_name"] += list([col] * len(data))
         # print(len([col] * len(data)))
-        summary_dict["type"] += list(["read_count"] * len(data))
-        # print(len(["read_count"] * len(data)))
         summary_dict["fc_values"] += list(data[col])
         if data_pos is not None and data_neg is not None:
             summary_dict["fc"] += list(["+"] * len(data_pos) + ["-"] * len(data_neg))
@@ -566,6 +568,11 @@ class TestingBinReadAnalyzer:
 
     def int_summary(self, summary_df):
         summary_df[["count", "control_count"]] = summary_df[["count", "control_count"]].astype(int)
+
+    def concat_summary(self, sum_prop, sum_clip):
+        data_df = pd.concat([sum_prop, sum_clip])
+        data_df = data_df.sort_values(by=["chr", "clone_name"])
+        return data_df
 
     def summary_sig_nosig_bins(self, fc, control_name, saving_folder):
         # dataframe for information on significant BINS
@@ -583,48 +590,48 @@ class TestingBinReadAnalyzer:
         sum_sig_clip_bins = pd.DataFrame(summary_sig_clip_data)
         sum_nosig_clip_bins = pd.DataFrame(summary_nosig_clip_data)
 
+        sig_df = self.concat_summary(sum_sig_bins, sum_sig_clip_bins)
+        nosig_df = self.concat_summary(sum_nosig_bins, sum_nosig_clip_bins)
+
         # ---- uncomment to transform float counts coming from normalization process into integer counts ----
-        self.int_summary(sum_sig_bins)
-        self.int_summary(sum_nosig_bins)
+        # self.int_summary(sum_sig_bins)
+        # self.int_summary(sum_nosig_bins)
         # ---- uncomment to check the subdataframe of significant bins ----
         # sum_sig_bins.to_csv(saving_folder + "method_mod_sum_sig_bins.tsv", sep="\t")
         # sum_nosig_bins.to_csv(saving_folder + "method_mod_sum_NOsig_bins.tsv", sep="\t")
 
         # ---- uncomment to transform float counts coming from normalization process into integer counts ----
-        self.int_summary(sum_sig_clip_bins)
-        self.int_summary(sum_nosig_clip_bins)
+        # self.int_summary(sum_sig_clip_bins)
+        # self.int_summary(sum_nosig_clip_bins)
         # ---- uncomment to check the subdataframe of significant bins ----
         # sum_sig_clip_bins.to_csv(saving_folder + "method_mod_sum_sig_clip_bins.tsv", sep="\t")
         # sum_nosig_clip_bins.to_csv(saving_folder + "/method_mod_sum_NOsig_clip_bins.tsv", sep="\t")
 
-        self.set_sig_bins(sum_sig_bins)
-        self.set_sig_clip_bins(sum_sig_clip_bins)
-        self.set_no_sig_bins(sum_nosig_bins)
-        self.set_no_sig_clip_bins(sum_nosig_clip_bins)
-        return self.sig_bins, self.sig_clip_bins, self.nosig_bins, self.nosig_clip_bins
+        self.set_sig_bins(sig_df)
+        # self.set_sig_clip_bins(sum_sig_clip_bins)
+        self.set_no_sig_bins(nosig_df)
+        # self.set_no_sig_clip_bins(sum_nosig_clip_bins)
+
+        return self.sig_bins, self.nosig_bins  #, self.sig_clip_bins, self.nosig_clip_bins
 
     def output_sig_positions(self, fc, control_name, file_output_path):
 
-        sig_df = pd.concat([self.sig_bins, self.sig_clip_bins])
-        sig_df = sig_df.sort_values(by=["clone_name", "chr", "start_pos"])
-
-        nosig_df = pd.concat([self.nosig_bins, self.nosig_clip_bins])
-        nosig_df = nosig_df.sort_values(by=["clone_name", "chr", "start_pos"])
-
         header = "# Chromosome positions in which fold-change is > " + str(fc) + \
                  " or < -" + str(fc) + " with respect to: " + control_name + "\n"
-        with open(file_output_path + "BRAN" + str(self.bin_size) + "_significant_changes_regions.tsv", "w") as file:
+        with open(file_output_path + "BRAN" + str(self.bin_size) + "_significant_changes_regions_" + str(fc) +
+                  ".tsv", "w") as file:
             file.write(header)
-            sig_df.to_csv(path_or_buf=file, sep="\t", index=False)
+            self.sig_bins.to_csv(path_or_buf=file, sep="\t", index=False)
 
         nosig_header = "# Chromosome positions in which fold-change is between the two thresholds of " + str(fc) + \
                        " / " + str(fc) + " respect to: " + control_name + "\n"
-        with open(file_output_path + "BRAN" + str(self.bin_size) + "_NOT_significant_changes_regions.tsv", "w") as file:
+        with open(file_output_path + "BRAN" + str(self.bin_size) + "_NOT_significant_changes_regions_" + str(fc) +
+                  ".tsv", "w") as file:
             file.write(nosig_header)
-            nosig_df.to_csv(path_or_buf=file, sep="\t", index=False)
+            self.nosig_bins.to_csv(path_or_buf=file, sep="\t", index=False)
 
-        print("\nSignificant changes regions\n", sig_df)
-        print("\nNOT significant changes regions\n", nosig_df)
+        print("\nSignificant changes regions\n", self.sig_bins)
+        print("\nNOT significant changes regions\n", self.nosig_bins)
 
     def plot(self, saving_folder, saving_format, cigar, unmapped, ref_genome, fc, pairwise, control_name, violin_bar,
              scatter, fold_change_pl, chr_name=None, sample=None):
@@ -909,6 +916,12 @@ if __name__ == "__main__":
                         default=None,
                         help="""If specified, a data-frame with information on the read ID, and if the read
                             and its mate map in the same bin in the same chromosome, is created""")
+    # TODO add this parameter to main and/or to visualizer
+    parser.add_argument("--show",
+                        action="store_true",
+                        default=False,
+                        help="""If specified allows BRAN to also show the plots in an HTML interactive page other then
+                        save them in a static mode. By default BRAN saves plots only in a static mode""")
     # ---------------------------------------
     # parser.add_argument("-N", "--Ns_count",
     #                     action="store_true",
@@ -990,8 +1003,8 @@ if __name__ == "__main__":
             analyzer.normalize_bins(args.control_name, args.saving_folder)
             analyzer.calc_fold_change(args.control_name, args.pairwise)
             analyzer.summary_sig_nosig_bins(args.fold_change, args.control_name, args.saving_folder)
-            exit(1)
             analyzer.output_sig_positions(args.fold_change, args.control_name, args.saving_folder)
+            # exit(1)
             analyzer.plot(plots_folder, args.saving_format, args.cigar,
                           args.unmapped, args.reference, args.fold_change, args.pairwise, args.control_name,
                           args.violin_bar, args.scatter, args.fold_change_pl, chr_name=args.chromosome,

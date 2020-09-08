@@ -945,7 +945,7 @@ class TestingBinReadVisualizer:
         self.add_threshold_fc(fig, fc, len_x_axis=len(self.clip_fold_change))
         self.plot_background(fig)
 
-        # fig.show()
+        fig.show()
 
         self.saving_plot(fig, description=description)
 
