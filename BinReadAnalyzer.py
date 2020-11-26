@@ -264,8 +264,8 @@ class BinReadAnalyzer:
         norm_counts = edger.cpm(counts_edger_df, normalized_lib_sizes=True)  # R object of norm counts
         log_norm_counts = edger.cpm(counts_edger_df, log=True)  # R object of log norm counts
 
-        # in order to pass from an R dataframe to a python dataframe in the most secure way, the R structure has to
-        # be decomposed and recomposed into the python one
+        # in order to pass from an R dataframe to a python.pandas dataframe in the most secure way, the R structure has
+        # to be decomposed and recomposed into the python.pandas one
         norm_dict = {}
         log_norm_dict = {}
         for i in range(1, norm_counts.ncol + 1):
@@ -286,18 +286,15 @@ class BinReadAnalyzer:
         using an R package, edgeR, imported thanks to rpy2 that provides
         an already implemented function, cpm, for the normalization of a
         table of counts, as well as a series of other function specifically
-        implemented for RNA-Seq; the normalization for clipped counts is done
-        manually"""
-        # self.read_counts.to_csv(str(self.bin_size) + "_norm_counts_check.txt", sep="\t")
-        # read_counts = self.no_repeats_df_transformation()
+        implemented for RNA-Seq"""
 
         # the edgeR package is imported using rpy2 syntax to access to all its built-in functions
-
-        read_counts_edger = {}  # a dictionary of sample: vector_of_counts to work with edger
+        read_counts_edger = {}  # a dictionary = {sample: vector_of_counts} to work with edger
         clipped_counts_edger = {}
         print("\n")
         print("Normalization process:\n")
 
+        # progressive work bar shows the ongoing process
         norm_bar = progressbar.ProgressBar(max_value=progressbar.UnknownLength)
         update_bar = 0
 
