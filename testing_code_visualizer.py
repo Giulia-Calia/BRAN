@@ -54,6 +54,7 @@ class TestingBinReadVisualizer:
         return template
 
     def saving_plot(self, fig, description):
+        fig.write_html(self.saving_folder + description + ".html")
         acceptable_formats = ["svg", "jpeg", "pdf", "png"]
         if self.saving_format not in acceptable_formats:
             print("Sorry the specified image format is not acceptable, please try again with one of these:",

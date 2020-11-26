@@ -1,19 +1,11 @@
 # BinReadVisualizer
 
 # This class furnish different ways to visualize data coming from BinReadAnalyzer
-# testing BinReadVisualizer
 
-# This class furnish different ways to visualize data coming from BinReadAnalyzer
-
-import os
-import argparse
-import math
 import re
 import plotly.graph_objects as go
-import plotly.express as px
 import plotly.io as pio
 import pandas as pd
-import numpy as np
 from plotly.subplots import make_subplots
 
 
@@ -39,6 +31,9 @@ class BinReadVisualizer:
         return sorted(column, key=alphanum_key)
 
     def color_palette(self, fc_colors=False):
+        """This method creates a personalized color palette for BRAN plots and
+         returns a template"""
+
         template = pio.templates["seaborn"]
         template.layout["font"]["color"] = "#2a3f5f"  # to verify: "#DC143C"
         color_palette = ["rgb(183, 10, 48)", "rgb(255, 186, 8)", "rgb(63, 163, 197)", "rgb(3, 84, 99)",
@@ -57,6 +52,10 @@ class BinReadVisualizer:
         return template
 
     def saving_plot(self, fig, description):
+        """This method takes in input go.Figure() and the title of the figure to
+         return it both in html and other allowed formats"""
+
+        fig.write_html(self.saving_folder + description + ".html")
         acceptable_formats = ["svg", "jpeg", "pdf", "png"]
         if self.saving_format not in acceptable_formats:
             print("Sorry the specified image format is not acceptable, please try again with one of these:",
@@ -65,6 +64,8 @@ class BinReadVisualizer:
             fig.write_image(self.saving_folder + description + "." + self.saving_format, width=1920, height=1080)
 
     def plot_background(self, fig):  # , df_counts
+        """This method take in input the go.Figure() to return a background
+         image of the figure"""
 
         coordinates_x = []
         coordinates_y = []
@@ -141,6 +142,9 @@ class BinReadVisualizer:
                                  ))
 
     def add_threshold_fc(self, fig, fc, len_x_axis):
+        """This method takes in input a go.Figure(), a value and the length of
+        the genome/x_axis to return two red lines on value coordinates that
+        represent fold change thresholds"""
 
         fig.add_shape(go.layout.Shape(type="line",
                                       x0=0,
@@ -160,7 +164,8 @@ class BinReadVisualizer:
                                          width=1)))
 
     def plot_violin(self):
-        """"""
+        """This method takes in input self parameters to return violin plot
+        distribution of the bin/read_counts in all samples"""
 
         fig = make_subplots(rows=1, cols=2, subplot_titles=("Normalized Counts",
                                                             "Soft_Hard Clipped Read Counts"))
@@ -221,6 +226,8 @@ class BinReadVisualizer:
         self.saving_plot(fig, description="violin_plot_" + str(self.bin_size))
 
     def plot_bar(self, cigar, unmapped):
+        """This method takes in input self parameters to return a bar plot
+        representing the percentage of properly_mapped, clipped and unmapped reads"""
 
         summary_read_counts = []
         summary_clipped_counts = []
@@ -280,6 +287,10 @@ class BinReadVisualizer:
         self.saving_plot(fig, description="bar_chart_" + str(self.bin_size))
 
     def scatter_traces(self, fig, x_coord, y_coord, hover_text, trace_name):
+        """This method takes in input a go.Figure(), x and y coordinates of the
+        trace to be added to the figure, a description of the data and the trace
+        name to return a trace to be integrated into the input figure"""
+
         fig.add_trace(go.Scatter(x=x_coord,  # itw it begins from 0 any t.
                                  y=y_coord,
                                  hovertext=hover_text,
@@ -292,6 +303,8 @@ class BinReadVisualizer:
                                  name=trace_name))
 
     def scatter_layout(self, fig, title):
+        """This method takes in input a go.Figure() and a title string to create
+         the correct layout for scatter plots """
         fig.update_layout(title=title,
                           template=self.color_palette(),
                           legend_orientation="h",

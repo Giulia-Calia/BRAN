@@ -988,16 +988,16 @@ if __name__ == "__main__":
                                verbose=True)
 
             if not os.path.exists(args.saving_folder):
-                os.mkdir(args.saving_folder)
+                os.makedirs(args.saving_folder)
             else:
                 pass
 
             plots_folder = "{}plots/{}/".format(args.saving_folder, str(args.bin_size))
             os.makedirs(plots_folder, exist_ok=True)
-            # if not os.path.exists(plots_folder):
-            #     os.mkdir(plots_folder)
-            # else:
-            #     pass
+            if not os.path.exists(plots_folder):
+                os.mkdir(plots_folder)
+            else:
+                pass
             analyzer.sorted_df(args.saving_folder)
 
             analyzer.normalize_bins(args.control_name, args.saving_folder)
@@ -1010,8 +1010,8 @@ if __name__ == "__main__":
                           args.violin_bar, args.scatter, args.fold_change_pl, chr_name=args.chromosome,
                           sample=args.sample)
         else:
-            print("Argument '-co/--control_name' not passed, "
-                  "it has to be passed in order for fold_change to be calculated")
+            print("Argument '-co/--control_name' not passed or wrong, "
+                  "it has to be passed and exist in order to calculate the fold change")
 
     # ---------------------------complete_file_pickle-------------------------------------------------------------------
     # with open("../all_samples_pickles/BRAN250000_df.p", "rb") as input_param:
